@@ -120,6 +120,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private int avatarTextColor;
     private int avatarBackgroundColor;
     private boolean isReverseOrder = false;
+    private boolean showSystemMessages = false;
 
     public AtlasMessagesList(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
@@ -237,7 +238,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
 
                 // mark displayed message as read
                 Message msg = part.getMessage();
-                if (!msg.getSender().getUserId().equals(client.getAuthenticatedUserId())) {
+                if (!client.getAuthenticatedUserId().equals(msg.getSender().getUserId())) {
                     msg.markAsRead();
                 }
 
@@ -391,7 +392,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         ArrayList<Cell> messageItems = new ArrayList<AtlasMessagesList.Cell>();
         for (Message message : messages) {
             // System messages have `null` user ID
-            if (message.getSender().getUserId() == null) continue;
+            if (!showSystemMessages && message.getSender().getUserId() == null) continue;
 
             messageItems.clear();
             buildCellForMessage(message, messageItems);
@@ -412,8 +413,10 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         for (int i = 0; i < cells.size(); i++) {
             Cell item = cells.get(i);
             boolean newCluster = false;
-            if (!item.messagePart.getMessage().getSender().getUserId().equals(currentUser)) {
-                newCluster = true;
+            if (currentUser != null) {
+                if (!currentUser.equals(item.messagePart.getMessage().getSender().getUserId())) {
+                    newCluster = true;
+                }
             }
             Date sentAt = item.messagePart.getMessage().getSentAt();
             if (sentAt == null) sentAt = new Date();
@@ -518,8 +521,11 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                     if (changed) messagesAdapter.notifyDataSetInvalidated();
                     if (debug) Log.w(TAG, "refreshHandler() delivery status changed: " + changed);
                 }
-                if (msg.arg2 > 0 && !isReverseOrder) {
-                    messagesList.smoothScrollToPosition(messagesAdapter.getCount() - 1);
+                if (msg.arg2 > 0) {
+                    if (isReverseOrder)
+                        messagesList.smoothScrollToPosition(0);
+                    else
+                        messagesList.smoothScrollToPosition(messagesAdapter.getCount() - 1);
                 }
             }
             final long currentTimeMillis = System.currentTimeMillis();
@@ -573,7 +579,9 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     }
 
     public void jumpToLastMessage() {
-        if (!isReverseOrder)
+        if (isReverseOrder)
+            messagesList.smoothScrollToPosition(0);
+        else
             messagesList.smoothScrollToPosition(cells.size() - 1);
     }
 
@@ -597,6 +605,10 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
 
     public ListView getListView() {
         return messagesList;
+    }
+
+    public void setShowSystemMessages(boolean showSystemMessages) {
+        this.showSystemMessages = showSystemMessages;
     }
 
     private class GeoCell extends Cell implements DownloadQueue.CompleteListener {
