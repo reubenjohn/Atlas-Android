@@ -80,7 +80,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private static final String TAG = AtlasMessagesList.class.getSimpleName();
     private static final boolean debug = false;
 
-    private static final boolean CLUSTERED_BUBBLES = false;
+    private static final boolean CLUSTERED_BUBBLES = true;
 
     private static final int MESSAGE_TYPE_UPDATE_VALUES = 0;
     private static final int MESSAGE_REFRESH_UPDATE_ALL = 0;
