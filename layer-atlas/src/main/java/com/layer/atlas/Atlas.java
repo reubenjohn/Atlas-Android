@@ -15,18 +15,6 @@
  */
 package com.layer.atlas;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -40,6 +28,18 @@ import android.view.ViewGroup;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.Message;
 import com.layer.sdk.messaging.MessagePart;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * @author Oleg Orlov
@@ -111,15 +111,61 @@ public class Atlas {
         return sb.toString().trim();
     }
 
+    /**
+     * Participant allows Atlas classes to display information about users, like Message senders,
+     * Conversation participants, TypingIndicator users, etc.
+     */
+    public interface Participant {
+        Comparator<Participant> COMPARATOR = new FilteringComparator("");
+
+        /**
+         * Returns the first name of this Participant.
+         *
+         * @return The first name of this Participant
+         */
+        String getFirstName();
+
+        /**
+         * Returns the last name of this Participant.
+         *
+         * @return The last name of this Participant
+         */
+        String getLastName();
+    }
+
+    /**
+     * ParticipantProvider provides Atlas classes with Participant data.
+     */
+    public interface ParticipantProvider {
+        /**
+         * Returns a map of all Participants by their unique ID who match the provided `filter`, or
+         * all Participants if `filter` is `null`.  If `result` is provided, it is operated on and
+         * returned.  If `result` is `null`, a new Map is created and returned.
+         *
+         * @param filter The filter to apply to Participants
+         * @param result The Map to operate on
+         * @return A Map of all matching Participants keyed by ID.
+         */
+        Map<String, Participant> getParticipants(String filter, Map<String, Participant> result);
+
+        /**
+         * Returns the Participant with the given ID, or `null` if the participant is not yet
+         * available.
+         *
+         * @return The Participant with the given ID, or `null` if not available.
+         */
+        Atlas.Participant getParticipant(String userId);
+    }
+
     public static final class Tools {
         /** Millis in 24 Hours */
         public static final int TIME_HOURS_24 = 24 * 60 * 60 * 1000;
         // TODO: localization required to all time based constants below
-        public static final SimpleDateFormat sdf = new SimpleDateFormat("HH:mm a"); 
+        public static final SimpleDateFormat sdf = new SimpleDateFormat("HH:mm a");
         public static final SimpleDateFormat sdfDayOfWeek = new SimpleDateFormat("EEE, LLL dd,");
         /** Ensure you decrease value returned by Calendar.get(Calendar.DAY_OF_WEEK) by 1. Calendar's days starts from 1. */
         public static final String[] TIME_WEEKDAYS_NAMES = new String[] {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-        
+
         public static String toString(Message msg) {
             StringBuilder sb = new StringBuilder();
             for (MessagePart mp : msg.getMessageParts()) {
@@ -143,15 +189,15 @@ public class Atlas {
             }
             return result;
         }
-        
+
         public static float getPxFromDp(float dp, Context context) {
             return getPxFromDp(dp, context.getResources().getDisplayMetrics());
         }
-        
+
         public static float getPxFromDp(float dp, DisplayMetrics displayMetrics) {
             return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, displayMetrics);
         }
-        
+
         public static View findChildById(ViewGroup group, int id) {
             for (int i = 0; i < group.getChildCount(); i++) {
                 View child = group.getChildAt(i);
@@ -159,14 +205,14 @@ public class Atlas {
             }
             return null;
         }
-        
+
         public static void closeQuietly(InputStream stream) {
             if (stream == null) return;
             try {
                 stream.close();
             } catch (Throwable ignoredQueitly) {}
         }
-        
+
         public static void closeQuietly(OutputStream stream) {
             if (stream == null) return;
             try {
@@ -199,57 +245,12 @@ public class Atlas {
 
         public static String toStringSpec(int measureSpec) {
             switch (MeasureSpec.getMode(measureSpec)) {
-                case MeasureSpec.AT_MOST : return "" + MeasureSpec.getSize(measureSpec) + ":A";  
+                case MeasureSpec.AT_MOST:
+                    return "" + MeasureSpec.getSize(measureSpec) + ":A";
                 case MeasureSpec.EXACTLY : return "" + MeasureSpec.getSize(measureSpec) + ":E";
                 default                  : return "" + MeasureSpec.getSize(measureSpec) + ":U";
             }
         }
-    }
-
-    /**
-     * Participant allows Atlas classes to display information about users, like Message senders,
-     * Conversation participants, TypingIndicator users, etc.
-     */
-    public interface Participant {
-        /**
-         * Returns the first name of this Participant.
-         * 
-         * @return The first name of this Participant
-         */
-        String getFirstName();
-
-        /**
-         * Returns the last name of this Participant.
-         *
-         * @return The last name of this Participant
-         */
-        String getLastName();
-        
-        public static Comparator<Participant> COMPARATOR = new FilteringComparator("");
-    }
-
-    /**
-     * ParticipantProvider provides Atlas classes with Participant data.
-     */
-    public interface ParticipantProvider {
-        /**
-         * Returns a map of all Participants by their unique ID who match the provided `filter`, or
-         * all Participants if `filter` is `null`.  If `result` is provided, it is operated on and
-         * returned.  If `result` is `null`, a new Map is created and returned.
-         *
-         * @param filter The filter to apply to Participants
-         * @param result The Map to operate on
-         * @return A Map of all matching Participants keyed by ID.
-         */
-        Map<String, Participant> getParticipants(String filter, Map<String, Participant> result);
-
-        /**
-         * Returns the Participant with the given ID, or `null` if the participant is not yet
-         * available.
-         *
-         * @return The Participant with the given ID, or `null` if not available.
-         */
-        Atlas.Participant getParticipant(String userId);
     }
 
     public static final class FilteringComparator implements Comparator<Atlas.Participant> {
@@ -296,12 +297,10 @@ public class Atlas {
         
         private static final int BITMAP_DECODE_RETRIES = 10;
         private static final double MEMORY_THRESHOLD = 0.7;
-        
-        private volatile boolean shutdownLoader = false;
         private final Thread processingThread;
         private final Object lock = new Object();
         private final ArrayList<ImageSpec> queue = new ArrayList<ImageSpec>();
-        
+        private volatile boolean shutdownLoader = false;
         private LinkedHashMap<Object, Bitmap> cache = new LinkedHashMap<Object, Bitmap>(40, 1f, true) {
             private static final long serialVersionUID = 1L;
             protected boolean removeEldestEntry(Entry<Object, Bitmap> eldest) {
@@ -324,98 +323,10 @@ public class Atlas {
             processingThread.start();
         }
         
-        private final class Decoder extends Thread {
-            public Decoder(String threadName) {
-                super(threadName);
-            }
-            public void run() {
-                if (debug) Log.w(TAG, "ImageLoader.run() started");
-                while (!shutdownLoader) {
-   
-                    ImageSpec spec = null;
-                    // search bitmap ready to inflate
-                    // wait for queue
-                    synchronized (lock) {
-                        while (spec == null && !shutdownLoader) {
-                            try {
-                                lock.wait();
-                                if (shutdownLoader) return;
-                                // picking from queue
-                                for (int i = 0; i < queue.size(); i++) {
-                                    if (queue.get(i).inputStreamProvider.ready()) { // ready to inflate
-                                        spec = queue.remove(i);
-                                        break;
-                                    }
-                                }
-                            } catch (InterruptedException e) {}
-                        }
-                    }
-   
-                    // decoding bitmap
-                    int requiredWidth = spec.requiredWidth;
-                    int requiredHeight = spec.requiredHeight;
-                    // load
-                    long started = System.currentTimeMillis();
-                    InputStream streamForBounds = spec.inputStreamProvider.getInputStream();
-                    if (streamForBounds == null) { 
-                        Log.e(TAG, "decodeImage() stream is null! Request cancelled. Spec: " + spec.id + ", provider: " + spec.inputStreamProvider.getClass().getSimpleName()); return; 
-                    }
-                    BitmapFactory.Options originalOpts = new BitmapFactory.Options();
-                    originalOpts.inJustDecodeBounds = true;
-                    BitmapFactory.decodeStream(streamForBounds, null, originalOpts);
-                    Tools.closeQuietly(streamForBounds);
-                    // update spec if width and height are unknown
-                    spec.originalWidth = originalOpts.outWidth;
-                    spec.originalHeight = originalOpts.outHeight;
-                    int sampleSize = 1;
-                    while (originalOpts.outWidth / (sampleSize * 2) > requiredWidth) {
-                        sampleSize *= 2;
-                    }
-                    BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
-                    decodeOpts.inSampleSize = sampleSize;
-                    Bitmap bmp = null;
-                    InputStream streamForBitmap = spec.inputStreamProvider.getInputStream();
-                    try {
-                        bmp = BitmapFactory.decodeStream(streamForBitmap, null, decodeOpts);
-                    } catch (OutOfMemoryError e) {
-                        if (debug) Log.w(TAG, "decodeImage() out of memory. remove eldest");
-                        removeEldest();
-                        System.gc();
-                    }
-                    Tools.closeQuietly(streamForBitmap);
-                    if (bmp != null) {
-                        if (debug) Log.d(TAG, "decodeImage() decoded " + bmp.getWidth() + "x" + bmp.getHeight() 
-                                + " " + bmp.getByteCount() + " bytes" 
-                                + " req: " + requiredWidth + "x" + requiredHeight 
-                                                + " original: " + originalOpts.outWidth + "x" + originalOpts.outHeight 
-                                + " sampleSize: " + sampleSize
-                                + " in " +(System.currentTimeMillis() - started) + "ms from: " + spec.id);
-                    } else {
-                        if (debug) Log.d(TAG, "decodeImage() not decoded " + " req: " + requiredWidth + "x" + requiredHeight 
-                                + " in " +(System.currentTimeMillis() - started) + "ms from: " + spec.id);
-                    }
-   
-                    // decoded
-                    synchronized (lock) {
-                        if (bmp != null) {
-                            cache.put(spec.id, bmp);
-                            if (spec.listener != null) spec.listener.onBitmapLoaded(spec);
-                        } else if (spec.retries < BITMAP_DECODE_RETRIES) {
-                            spec.retries++;
-                            queue.add(0, spec);         // schedule retry
-                            lock.notifyAll();
-                        } /*else forget about this image, never put it back in queue */
-                    }
-   
-                    if (debug) Log.w(TAG, "decodeImage()   cache: " + cache.size() + ", queue: " + queue.size() + ", id: " + spec.id);
-                }
-            }
-        }
-    
         public Bitmap getBitmapFromCache(Object id) {
             return cache.get(id);
         }
-                
+
         /**
          * @return - byteCount of removed bitmap if bitmap found. <bold>-1</bold> otherwise
          */
@@ -473,7 +384,7 @@ public class Atlas {
         public static abstract class BitmapLoadListener {
             public abstract void onBitmapLoaded(ImageSpec spec);
         }
-        
+
         public static abstract class StreamProvider {
             public abstract InputStream getInputStream();
             public abstract boolean ready();
@@ -511,6 +422,100 @@ public class Atlas {
             public boolean ready() {
                 if (debug) Log.w(TAG, "ready() FileStreamProvider, file ready: " + file.getAbsolutePath());
                 return true;
+            }
+        }
+
+        private final class Decoder extends Thread {
+            public Decoder(String threadName) {
+                super(threadName);
+            }
+
+            public void run() {
+                if (debug) Log.w(TAG, "ImageLoader.run() started");
+                while (!shutdownLoader) {
+
+                    ImageSpec spec = null;
+                    // search bitmap ready to inflate
+                    // wait for queue
+                    synchronized (lock) {
+                        while (spec == null && !shutdownLoader) {
+                            try {
+                                lock.wait();
+                                if (shutdownLoader) return;
+                                // picking from queue
+                                for (int i = 0; i < queue.size(); i++) {
+                                    if (queue.get(i).inputStreamProvider.ready()) { // ready to inflate
+                                        spec = queue.remove(i);
+                                        break;
+                                    }
+                                }
+                            } catch (InterruptedException e) {
+                            }
+                        }
+                    }
+
+                    // decoding bitmap
+                    int requiredWidth = spec.requiredWidth;
+                    int requiredHeight = spec.requiredHeight;
+                    // load
+                    long started = System.currentTimeMillis();
+                    InputStream streamForBounds = spec.inputStreamProvider.getInputStream();
+                    if (streamForBounds == null) {
+                        Log.e(TAG, "decodeImage() stream is null! Request cancelled. Spec: " + spec.id + ", provider: " + spec.inputStreamProvider.getClass().getSimpleName());
+                        return;
+                    }
+                    BitmapFactory.Options originalOpts = new BitmapFactory.Options();
+                    originalOpts.inJustDecodeBounds = true;
+                    BitmapFactory.decodeStream(streamForBounds, null, originalOpts);
+                    Tools.closeQuietly(streamForBounds);
+                    // update spec if width and height are unknown
+                    spec.originalWidth = originalOpts.outWidth;
+                    spec.originalHeight = originalOpts.outHeight;
+                    int sampleSize = 1;
+                    while (originalOpts.outWidth / (sampleSize * 2) > requiredWidth) {
+                        sampleSize *= 2;
+                    }
+                    BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+                    decodeOpts.inSampleSize = sampleSize;
+                    Bitmap bmp = null;
+                    InputStream streamForBitmap = spec.inputStreamProvider.getInputStream();
+                    try {
+                        bmp = BitmapFactory.decodeStream(streamForBitmap, null, decodeOpts);
+                    } catch (OutOfMemoryError e) {
+                        if (debug) Log.w(TAG, "decodeImage() out of memory. remove eldest");
+                        removeEldest();
+                        System.gc();
+                    }
+                    Tools.closeQuietly(streamForBitmap);
+                    if (bmp != null) {
+                        if (debug)
+                            Log.d(TAG, "decodeImage() decoded " + bmp.getWidth() + "x" + bmp.getHeight()
+                                    + " " + bmp.getByteCount() + " bytes"
+                                    + " req: " + requiredWidth + "x" + requiredHeight
+                                    + " original: " + originalOpts.outWidth + "x" + originalOpts.outHeight
+                                    + " sampleSize: " + sampleSize
+                                    + " in " + (System.currentTimeMillis() - started) + "ms from: " + spec.id);
+                    } else {
+                        if (debug)
+                            Log.d(TAG, "decodeImage() not decoded " + " req: " + requiredWidth + "x" + requiredHeight
+                                    + " in " + (System.currentTimeMillis() - started) + "ms from: " + spec.id);
+                    }
+
+                    // decoded
+                    synchronized (lock) {
+                        if (bmp != null) {
+                            cache.put(spec.id, bmp);
+                            if (spec.listener != null) spec.listener.onBitmapLoaded(spec);
+                        } else if (spec.retries < BITMAP_DECODE_RETRIES) {
+                            spec.retries++;
+                            queue.add(0, spec);         // schedule retry
+                            lock.notifyAll();
+                        } /*else forget about this image, never put it back in queue */
+                    }
+
+                    if (debug)
+                        Log.w(TAG, "decodeImage()   cache: " + cache.size() + ", queue: " + queue.size() + ", id: " + spec.id);
+                }
             }
         }
     }

@@ -15,9 +15,12 @@
  */
 package com.layer.atlas.messenger.provider;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.util.Log;
+
+import com.layer.atlas.Atlas;
+import com.layer.atlas.Atlas.Participant;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -30,12 +33,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.util.Log;
-
-import com.layer.atlas.Atlas;
-import com.layer.atlas.Atlas.Participant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author Oleg Orlov
@@ -80,6 +80,27 @@ public class HerokuIdentityProvider extends IdentityProvider implements Atlas.Pa
         }, "heroku-contact-fetcher").start();
     }
 
+    public static Map<String, Contact> parseContacts(String responseString, Map<String, Contact> result) {
+        if (result == null) result = new HashMap<String, Contact>();
+        JSONArray responseContacts;
+        try {
+            responseContacts = new JSONArray(responseString);
+            for (int i = 0; i < responseContacts.length(); i++) {
+                JSONObject responseContact = responseContacts.getJSONObject(i);
+                Contact contact = new Contact();
+                contact.userId = responseContact.getString("id");
+                contact.firstName = responseContact.optString("first_name");
+                contact.lastName = responseContact.optString("last_name");
+                contact.email = responseContact.optString(PREF_KEY_EMAIL);
+                result.put(contact.userId, contact);
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "loadContacts() error when load contacts... ", e);
+            return null;
+        }
+        return result;
+    }
+
     @Override
     public Result getIdentityToken(String nonce, String userEmail, String userPassword) {
         try {
@@ -115,7 +136,7 @@ public class HerokuIdentityProvider extends IdentityProvider implements Atlas.Pa
             synchronized (this) {
                 notifyAll();
             }
-            
+
             return result;
         } catch (Exception e) {
             Log.e(TAG, "Error when fetching identity token", e);
@@ -143,32 +164,11 @@ public class HerokuIdentityProvider extends IdentityProvider implements Atlas.Pa
             if (parseContacts(responseString, contacts) != null) {
                 // save if contacts are ok
                 sharedPrefs.edit().putString(PREF_KEY_CONTACTS, responseString).apply();
-            };
-            
+            }
+
         } catch (Exception e) {
             Log.e(TAG, "Error when fetching contacts", e);
         }
-    }
-
-    public static Map<String, Contact> parseContacts(String responseString, Map<String, Contact> result) {
-        if (result == null) result = new HashMap<String, Contact>();
-        JSONArray responseContacts;
-        try {
-            responseContacts = new JSONArray(responseString);
-            for (int i = 0; i < responseContacts.length(); i++) {
-                JSONObject responseContact = responseContacts.getJSONObject(i);
-                Contact contact = new Contact();
-                contact.userId = responseContact.getString("id");
-                contact.firstName = responseContact.optString("first_name");
-                contact.lastName = responseContact.optString("last_name");
-                contact.email    = responseContact.optString(PREF_KEY_EMAIL);
-                result.put(contact.userId, contact);
-            }
-        } catch (JSONException e) {
-            Log.e(TAG, "loadContacts() error when load contacts... ", e);
-            return null;
-        }
-        return result;
     }
 
     public void load() {
@@ -208,7 +208,12 @@ public class HerokuIdentityProvider extends IdentityProvider implements Atlas.Pa
     public Participant getParticipant(String userId) {
         return contacts.get(userId);
     }
-    
+
+    @Override
+    public boolean passwordRequired() {
+        return true;
+    }
+
     public static class Contact implements Participant {
         public String userId;
         public String firstName;
@@ -224,10 +229,5 @@ public class HerokuIdentityProvider extends IdentityProvider implements Atlas.Pa
         public String getLastName() {
             return lastName;
         }
-    }
-
-    @Override
-    public boolean passwordRequired() {
-        return true;
     }
 }

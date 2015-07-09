@@ -85,42 +85,73 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private static final int MESSAGE_TYPE_UPDATE_VALUES = 0;
     private static final int MESSAGE_REFRESH_UPDATE_ALL = 0;
     private static final int MESSAGE_REFRESH_UPDATE_DELIVERY = 1;
-
-    private final DateFormat timeFormat;
-
-    private ListView messagesList;
-    private BaseAdapter messagesAdapter;
-
-    private ArrayList<Cell> cells = new ArrayList<Cell>();
-
-    private LayerClient client;
-    private Conversation conv;
-
-    private Message latestReadMessage = null;
-    private Message latestDeliveredMessage = null;
-
-    private ItemClickListener clickListener;
-
     //styles
     private static final float CELL_CONTAINER_ALPHA_UNSENT = 0.5f;
     private static final float CELL_CONTAINER_ALPHA_SENT = 1.0f;
+    private static final BitmapDrawable EMPTY_DRAWABLE = new BitmapDrawable(Bitmap.createBitmap(new int[]{Color.TRANSPARENT}, 1, 1, Bitmap.Config.ALPHA_8));
+    private static final Atlas.ImageLoader imageLoader = new Atlas.ImageLoader();
+    private static final DownloadQueue downloadQueue = new DownloadQueue();
+    private final DateFormat timeFormat;
+    private ListView messagesList;
+    private final Runnable INVALIDATE_VIEW = new Runnable() {
+        public void run() {
+            messagesList.invalidateViews();
+        }
+    };
+    private final BitmapLoadListener BITMAP_LOAD_LISTENER = new ImageLoader.BitmapLoadListener() {
+        public void onBitmapLoaded(ImageSpec spec) {
+            postViewRefresh();
+        }
+    };
+    private BaseAdapter messagesAdapter;
+    private ArrayList<Cell> cells = new ArrayList<Cell>();
+    private LayerClient client;
+    private Conversation conv;
+    private Message latestReadMessage = null;
+    private Message latestDeliveredMessage = null;
+    private ItemClickListener clickListener;
     private int myBubbleColor;
     private int myTextColor;
     private int myTextStyle;
     private float myTextSize;
     private Typeface myTextTypeface;
-
     private int otherBubbleColor;
     private int otherTextColor;
     private int otherTextStyle;
     private float otherTextSize;
     private Typeface otherTextTypeface;
-
     private int dateTextColor;
     private int avatarTextColor;
     private int avatarBackgroundColor;
     private boolean isReverseOrder = false;
     private boolean showSystemMessages = false;
+    private long messageUpdateSentAt = 0;
+    private final Handler refreshHandler = new Handler() {
+        public void handleMessage(android.os.Message msg) {
+            long started = System.currentTimeMillis();
+            if (msg.what == MESSAGE_TYPE_UPDATE_VALUES) {
+                if (msg.arg1 == MESSAGE_REFRESH_UPDATE_ALL) {
+                    updateValues();
+                } else if (msg.arg1 == MESSAGE_REFRESH_UPDATE_DELIVERY) {
+                    LayerClient client = (LayerClient) msg.obj;
+                    boolean changed = updateDeliveryStatus(client.getMessages(conv));
+                    if (changed) messagesAdapter.notifyDataSetInvalidated();
+                    if (debug) Log.w(TAG, "refreshHandler() delivery status changed: " + changed);
+                }
+                if (msg.arg2 > 0) {
+                    if (isReverseOrder)
+                        messagesList.smoothScrollToPosition(0);
+                    else
+                        messagesList.smoothScrollToPosition(messagesAdapter.getCount() - 1);
+                }
+            }
+            final long currentTimeMillis = System.currentTimeMillis();
+            if (debug)
+                Log.w(TAG, "handleMessage() delay: " + (currentTimeMillis - messageUpdateSentAt) + "ms, handled in: " + (currentTimeMillis - started) + "ms");
+            messageUpdateSentAt = 0;
+        }
+
+    };
 
     public AtlasMessagesList(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
@@ -135,6 +166,54 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     public AtlasMessagesList(Context context) {
         super(context);
         this.timeFormat = android.text.format.DateFormat.getTimeFormat(context);
+    }
+
+    private static boolean downloadToFile(String url, File file) {
+        HttpGet get = new HttpGet(url);
+        HttpResponse response;
+        try {
+            response = (new DefaultHttpClient()).execute(get);
+            if (HttpStatus.SC_OK != response.getStatusLine().getStatusCode()) {
+                Log.e(TAG, String.format("Expected status 200, but got %d", response.getStatusLine().getStatusCode()));
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "downloadToFile() cannot execute http request: " + url, e);
+            return false;
+        }
+
+        File dir = file.getParentFile();
+        if (!dir.exists() && !dir.mkdirs()) {
+            Log.e(TAG, String.format("Could not create directories for `%s`", dir.getAbsolutePath()));
+            return false;
+        }
+
+        File tempFile = new File(file.getAbsolutePath() + ".tmp");
+
+        try {
+            Tools.streamCopyAndClose(response.getEntity().getContent(), new FileOutputStream(tempFile, false));
+            response.getEntity().consumeContent();
+        } catch (IOException e) {
+            if (debug)
+                Log.e(TAG, "downloadToFile() cannot extract content from http response: " + url, e);
+        }
+
+        if (tempFile.length() != response.getEntity().getContentLength()) {
+            tempFile.delete();
+            Log.e(TAG, String.format("downloadToFile() File size mismatch for `%s` (%d vs %d)", tempFile.getAbsolutePath(), tempFile.length(), response.getEntity().getContentLength()));
+            return false;
+        }
+
+        // last step
+        if (tempFile.renameTo(file)) {
+            if (debug)
+                Log.w(TAG, "downloadToFile() Successfully downloaded file: " + file.getAbsolutePath());
+            return true;
+        } else {
+            Log.e(TAG, "downloadToFile() Could not rename temp file: " + tempFile.getAbsolutePath() + " to: " + file.getAbsolutePath());
+            return false;
+        }
+
     }
 
     public void init(final LayerClient layerClient, final Atlas.ParticipantProvider participantProvider) {
@@ -471,7 +550,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                 Map<String, RecipientStatus> statuses = message.getRecipientStatus();
                 if (statuses == null || statuses.size() == 0) continue;
                 for (Map.Entry<String, RecipientStatus> entry : statuses.entrySet()) {
-                    // our read-status doesn't matter 
+                    // our read-status doesn't matter
                     if (entry.getKey().equals(client.getAuthenticatedUserId())) continue;
 
                     if (entry.getValue() == RecipientStatus.READ) {
@@ -507,35 +586,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
 
         return changed;
     }
-
-    private long messageUpdateSentAt = 0;
-
-    private final Handler refreshHandler = new Handler() {
-        public void handleMessage(android.os.Message msg) {
-            long started = System.currentTimeMillis();
-            if (msg.what == MESSAGE_TYPE_UPDATE_VALUES) {
-                if (msg.arg1 == MESSAGE_REFRESH_UPDATE_ALL) {
-                    updateValues();
-                } else if (msg.arg1 == MESSAGE_REFRESH_UPDATE_DELIVERY) {
-                    LayerClient client = (LayerClient) msg.obj;
-                    boolean changed = updateDeliveryStatus(client.getMessages(conv));
-                    if (changed) messagesAdapter.notifyDataSetInvalidated();
-                    if (debug) Log.w(TAG, "refreshHandler() delivery status changed: " + changed);
-                }
-                if (msg.arg2 > 0) {
-                    if (isReverseOrder)
-                        messagesList.smoothScrollToPosition(0);
-                    else
-                        messagesList.smoothScrollToPosition(messagesAdapter.getCount() - 1);
-                }
-            }
-            final long currentTimeMillis = System.currentTimeMillis();
-            if (debug)
-                Log.w(TAG, "handleMessage() delay: " + (currentTimeMillis - messageUpdateSentAt) + "ms, handled in: " + (currentTimeMillis - started) + "ms");
-            messageUpdateSentAt = 0;
-        }
-
-    };
 
     @Override
     public void onEventMainThread(LayerChangeEvent event) {
@@ -610,6 +660,92 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
 
     public void setShowSystemMessages(boolean showSystemMessages) {
         this.showSystemMessages = showSystemMessages;
+    }
+
+    private void postViewRefresh() {
+        messagesList.post(INVALIDATE_VIEW);
+    }
+
+    public interface ItemClickListener {
+        void onItemClick(Cell item);
+    }
+
+    private static class DownloadQueue {
+        private static final String TAG = DownloadQueue.class.getSimpleName();
+
+        final ArrayList<Entry> queue = new ArrayList<AtlasMessagesList.DownloadQueue.Entry>();
+        final HashMap<String, Entry> url2Entry = new HashMap<String, Entry>();
+        private volatile Entry inProgress = null;
+        private Thread workingThread = new Thread(new Runnable() {
+            public void run() {
+                while (true) {
+                    Entry next = null;
+                    synchronized (queue) {
+                        while (queue.size() == 0) {
+                            try {
+                                queue.wait();
+                            } catch (InterruptedException ignored) {
+                            }
+                        }
+                        next = queue.remove(queue.size() - 1); // get last
+                        url2Entry.remove(next.url);
+                        inProgress = next;
+                    }
+                    try {
+                        if (downloadToFile(next.url, next.file)) {
+                            if (next.completeListener != null) {
+                                next.completeListener.onDownloadComplete(next.url, next.file);
+                            }
+                        }
+                    } catch (Throwable e) {
+                        Log.e(TAG, "onComplete() thrown an exception for: " + next.url, e);
+                    }
+                    inProgress = null;
+                }
+            }
+        });
+
+        public DownloadQueue() {
+            workingThread.setDaemon(true);
+            workingThread.setName("Atlas-HttpDownloadQueue");
+            workingThread.start();
+        }
+
+        public void schedule(String url, File to, CompleteListener onComplete) {
+            if (inProgress != null && inProgress.url.equals(url)) {
+                return;
+            }
+            synchronized (queue) {
+                Entry existing = url2Entry.get(url);
+                if (existing != null) {
+                    queue.remove(existing);
+                    queue.add(existing);
+                } else {
+                    Entry toSchedule = new Entry(url, to, onComplete);
+                    queue.add(toSchedule);
+                    url2Entry.put(toSchedule.url, toSchedule);
+                }
+                queue.notifyAll();
+            }
+        }
+
+        public interface CompleteListener {
+            void onDownloadComplete(String url, File file);
+        }
+
+        private static class Entry {
+            String url;
+            File file;
+            CompleteListener completeListener;
+
+            public Entry(String url, File file, CompleteListener listener) {
+                if (url == null) throw new IllegalArgumentException("url cannot be null");
+                if (file == null) throw new IllegalArgumentException("file cannot be null");
+                this.url = url;
+                this.file = file;
+                this.completeListener = listener;
+            }
+        }
     }
 
     private class GeoCell extends Cell implements DownloadQueue.CompleteListener {
@@ -738,134 +874,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
     }
 
-    private static boolean downloadToFile(String url, File file) {
-        HttpGet get = new HttpGet(url);
-        HttpResponse response;
-        try {
-            response = (new DefaultHttpClient()).execute(get);
-            if (HttpStatus.SC_OK != response.getStatusLine().getStatusCode()) {
-                Log.e(TAG, String.format("Expected status 200, but got %d", response.getStatusLine().getStatusCode()));
-                return false;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "downloadToFile() cannot execute http request: " + url, e);
-            return false;
-        }
-
-        File dir = file.getParentFile();
-        if (!dir.exists() && !dir.mkdirs()) {
-            Log.e(TAG, String.format("Could not create directories for `%s`", dir.getAbsolutePath()));
-            return false;
-        }
-
-        File tempFile = new File(file.getAbsolutePath() + ".tmp");
-
-        try {
-            Tools.streamCopyAndClose(response.getEntity().getContent(), new FileOutputStream(tempFile, false));
-            response.getEntity().consumeContent();
-        } catch (IOException e) {
-            if (debug)
-                Log.e(TAG, "downloadToFile() cannot extract content from http response: " + url, e);
-        }
-
-        if (tempFile.length() != response.getEntity().getContentLength()) {
-            tempFile.delete();
-            Log.e(TAG, String.format("downloadToFile() File size mismatch for `%s` (%d vs %d)", tempFile.getAbsolutePath(), tempFile.length(), response.getEntity().getContentLength()));
-            return false;
-        }
-
-        // last step
-        if (tempFile.renameTo(file)) {
-            if (debug)
-                Log.w(TAG, "downloadToFile() Successfully downloaded file: " + file.getAbsolutePath());
-            return true;
-        } else {
-            Log.e(TAG, "downloadToFile() Could not rename temp file: " + tempFile.getAbsolutePath() + " to: " + file.getAbsolutePath());
-            return false;
-        }
-
-    }
-
-    private static class DownloadQueue {
-        private static final String TAG = DownloadQueue.class.getSimpleName();
-
-        final ArrayList<Entry> queue = new ArrayList<AtlasMessagesList.DownloadQueue.Entry>();
-        final HashMap<String, Entry> url2Entry = new HashMap<String, Entry>();
-        private volatile Entry inProgress = null;
-
-        public DownloadQueue() {
-            workingThread.setDaemon(true);
-            workingThread.setName("Atlas-HttpDownloadQueue");
-            workingThread.start();
-        }
-
-        public void schedule(String url, File to, CompleteListener onComplete) {
-            if (inProgress != null && inProgress.url.equals(url)) {
-                return;
-            }
-            synchronized (queue) {
-                Entry existing = url2Entry.get(url);
-                if (existing != null) {
-                    queue.remove(existing);
-                    queue.add(existing);
-                } else {
-                    Entry toSchedule = new Entry(url, to, onComplete);
-                    queue.add(toSchedule);
-                    url2Entry.put(toSchedule.url, toSchedule);
-                }
-                queue.notifyAll();
-            }
-        }
-
-        private Thread workingThread = new Thread(new Runnable() {
-            public void run() {
-                while (true) {
-                    Entry next = null;
-                    synchronized (queue) {
-                        while (queue.size() == 0) {
-                            try {
-                                queue.wait();
-                            } catch (InterruptedException ignored) {
-                            }
-                        }
-                        next = queue.remove(queue.size() - 1); // get last
-                        url2Entry.remove(next.url);
-                        inProgress = next;
-                    }
-                    try {
-                        if (downloadToFile(next.url, next.file)) {
-                            if (next.completeListener != null) {
-                                next.completeListener.onDownloadComplete(next.url, next.file);
-                            }
-                        }
-                        ;
-                    } catch (Throwable e) {
-                        Log.e(TAG, "onComplete() thrown an exception for: " + next.url, e);
-                    }
-                    inProgress = null;
-                }
-            }
-        });
-
-        private static class Entry {
-            String url;
-            File file;
-            CompleteListener completeListener;
-
-            public Entry(String url, File file, CompleteListener listener) {
-                if (url == null) throw new IllegalArgumentException("url cannot be null");
-                if (file == null) throw new IllegalArgumentException("file cannot be null");
-                this.url = url;
-                this.file = file;
-                this.completeListener = listener;
-            }
-        }
-
-        public interface CompleteListener {
-            public void onDownloadComplete(String url, File file);
-        }
-    }
-
     private class TextCell extends Cell {
 
         protected String text;
@@ -942,8 +950,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
             return cellText;
         }
     }
-
-    private static final BitmapDrawable EMPTY_DRAWABLE = new BitmapDrawable(Bitmap.createBitmap(new int[]{Color.TRANSPARENT}, 1, 1, Bitmap.Config.ALPHA_8));
 
     private class ImageCell extends Cell implements LayerProgressListener {
         MessagePart previewPart;
@@ -1089,25 +1095,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
     }
 
-    private void postViewRefresh() {
-        messagesList.post(INVALIDATE_VIEW);
-    }
-
-    private final Runnable INVALIDATE_VIEW = new Runnable() {
-        public void run() {
-            messagesList.invalidateViews();
-        }
-    };
-
-    private final BitmapLoadListener BITMAP_LOAD_LISTENER = new ImageLoader.BitmapLoadListener() {
-        public void onBitmapLoaded(ImageSpec spec) {
-            postViewRefresh();
-        }
-    };
-
-    private static final Atlas.ImageLoader imageLoader = new Atlas.ImageLoader();
-    private static final DownloadQueue downloadQueue = new DownloadQueue();
-
     public abstract class Cell {
         public final MessagePart messagePart;
         private int clusterHeadItemId;
@@ -1133,11 +1120,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
 
         public abstract View onBind(ViewGroup cellContainer);
-    }
-
-
-    public interface ItemClickListener {
-        void onItemClick(Cell item);
     }
 
 }

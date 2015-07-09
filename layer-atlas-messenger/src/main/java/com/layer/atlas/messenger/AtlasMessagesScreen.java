@@ -15,21 +15,6 @@
  */
 package com.layer.atlas.messenger;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import android.app.Activity;
 import android.app.NotificationManager;
 import android.content.Context;
@@ -67,41 +52,75 @@ import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.Message;
 import com.layer.sdk.messaging.MessagePart;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
 /**
  * @author Oleg Orlov
  * @since 14 Apr 2015
  */
 public class AtlasMessagesScreen extends Activity {
 
-    private static final String TAG = AtlasMessagesScreen.class.getSimpleName();
-    private static final boolean debug = false;
-    
     public static final String EXTRA_CONVERSATION_IS_NEW = "conversation.new";
     public static final String EXTRA_CONVERSATION_URI = keys.CONVERSATION_URI;
-    
     public static final int REQUEST_CODE_SETTINGS = 101;
     public static final int REQUEST_CODE_GALLERY  = 111;
     public static final int REQUEST_CODE_CAMERA   = 112;
-        
+    private static final String TAG = AtlasMessagesScreen.class.getSimpleName();
+    private static final boolean debug = false;
+    private static final int LOCATION_EXPIRATION_TIME = 60 * 1000; // 1 minute
     private volatile Conversation conv;
-    
     private LocationManager locationManager;
     private Location lastKnownLocation;
     private Handler uiHandler;
-    
+    LocationListener locationTracker = new LocationListener() {
+        @Override
+        public void onLocationChanged(final Location location) {
+            uiHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    lastKnownLocation = location;
+                    if (debug) Log.d(TAG, "onLocationChanged() location: " + location);
+                }
+            });
+        }
+
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+        }
+
+        public void onProviderEnabled(String provider) {
+        }
+
+        public void onProviderDisabled(String provider) {
+        }
+    };
     private AtlasMessagesList messagesList;
     private AtlasMessageComposer messageComposer;
     private AtlasParticipantPicker participantsPicker;
     private AtlasTypingIndicator typingIndicator;
-    
     private MessengerApp app;
+    /**
+     * used to take photos from camera
+     */
+    private File photoFile = null;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.uiHandler = new Handler();
         this.app = (MessengerApp) getApplication();
-        
+
         setContentView(R.layout.atlas_screen_messages);
 
         boolean convIsNew = getIntent().getBooleanExtra(EXTRA_CONVERSATION_IS_NEW, false);
@@ -117,7 +136,7 @@ public class AtlasMessagesScreen extends Activity {
         if (convIsNew) {
             participantsPicker.setVisibility(View.VISIBLE);
         }
-        
+
         messageComposer = (AtlasMessageComposer) findViewById(R.id.atlas_screen_messages_message_composer);
         messageComposer.init(app.getLayerClient(), conv);
         messageComposer.setListener(new AtlasMessageComposer.Listener() {
@@ -131,11 +150,11 @@ public class AtlasMessagesScreen extends Activity {
             }
 
         });
-        
+
         messageComposer.registerMenuItem("Photo", new OnClickListener() {
             public void onClick(View v) {
                 if (!ensureConversationReady()) return;
-                
+
                 Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
                 String fileName = "cameraOutput" + System.currentTimeMillis() + ".jpg";
                 photoFile = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), fileName);
@@ -149,7 +168,7 @@ public class AtlasMessagesScreen extends Activity {
         messageComposer.registerMenuItem("Image", new OnClickListener() {
             public void onClick(View v) {
                 if (!ensureConversationReady()) return;
-                
+
                 // in onCreate or any event where your want the user to select a file
                 Intent intent = new Intent();
                 intent.setType("image/*");
@@ -157,11 +176,11 @@ public class AtlasMessagesScreen extends Activity {
                 startActivityForResult(Intent.createChooser(intent, "Select Picture"), REQUEST_CODE_GALLERY);
             }
         });
-        
+
         messageComposer.registerMenuItem("Location", new OnClickListener() {
             public void onClick(View v) {
                 if (!ensureConversationReady()) return;
-                
+
                 if (lastKnownLocation == null) {
                     Toast.makeText(v.getContext(), "Inserting Location: Location is unknown yet", Toast.LENGTH_SHORT).show();
                     return;
@@ -169,14 +188,14 @@ public class AtlasMessagesScreen extends Activity {
                 String locationString = "{\"lat\":" + lastKnownLocation.getLatitude() + ", \"lon\":" + lastKnownLocation.getLongitude() + "}";
                 MessagePart part = app.getLayerClient().newMessagePart(Atlas.MIME_TYPE_ATLAS_LOCATION, locationString.getBytes());
                 Message message = app.getLayerClient().newMessage(Arrays.asList(part));
-                
+
                 preparePushMetadata(message);
                 conv.send(message);
 
                 if (debug) Log.w(TAG, "onSendLocation() loc:  " + locationString);
             }
         });
-        
+
         messagesList = (AtlasMessagesList) findViewById(R.id.atlas_screen_messages_messages_list);
         messagesList.init(app.getLayerClient(), app.getParticipantProvider());
         messagesList.setConversation(conv);
@@ -205,22 +224,22 @@ public class AtlasMessagesScreen extends Activity {
                 }
             }
         });
-        
+
         typingIndicator = (AtlasTypingIndicator)findViewById(R.id.atlas_screen_messages_typing_indicator);
         typingIndicator.init(conv, new AtlasTypingIndicator.DefaultTypingIndicatorCallback(app.getParticipantProvider()));
-        
+
         // location manager for inserting locations:
         this.locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        
+
         prepareActionBar();
     }
-    
+
     private void updateValues() {
         if (conv == null) {
             Log.e(TAG, "updateValues() no conversation set");
             return;
         }
-        
+
         messagesList.updateValues();
 
         TextView titleText = (TextView) findViewById(R.id.atlas_actionbar_title_text);
@@ -229,16 +248,16 @@ public class AtlasMessagesScreen extends Activity {
     
     private boolean ensureConversationReady() {
         if (conv != null) return true;
-        
+
         // create new one
         String[] userIds = participantsPicker.getSelectedUserIds();
-        
+
         // no people, no conversation
-        if (userIds.length == 0) {          
+        if (userIds.length == 0) {
             Toast.makeText(this, "Conversation cannot be created without participants", Toast.LENGTH_SHORT).show();
             return false;
         }
-        
+
         conv = app.getLayerClient().newConversation(userIds);
         participantsPicker.setVisibility(View.GONE);
         messageComposer.setConversation(conv);
@@ -247,7 +266,7 @@ public class AtlasMessagesScreen extends Activity {
         updateValues();
         return true;
     }
-    
+
     private void preparePushMetadata(Message message) {
         Participant me = app.getParticipantProvider().getParticipant(app.getLayerClient().getAuthenticatedUserId());
         String senderName = Atlas.getFullName(me);
@@ -262,10 +281,6 @@ public class AtlasMessagesScreen extends Activity {
             message.setMetadata(metadata);
         }
     }
-
-    
-    /** used to take photos from camera */
-    private File photoFile = null; 
     
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -273,14 +288,14 @@ public class AtlasMessagesScreen extends Activity {
                     + ", resultCode: " + resultCode
                     + ", uri: "  + (data == null ? "" : data.getData())
                     + ", data: " + (data == null ? "" : MessengerApp.toString(data.getExtras())) );
-        
+
         if (resultCode != Activity.RESULT_OK) return;
-        
+
         final LayerClient layerClient = ((MessengerApp) getApplication()).getLayerClient();
-        
+
         switch (requestCode) {
             case REQUEST_CODE_CAMERA  :
-                
+
                 if (photoFile == null) {
                     if (debug) Log.w(TAG, "onActivityResult() taking photo, but output is undefined... ");
                     return;
@@ -293,7 +308,7 @@ public class AtlasMessagesScreen extends Activity {
                     if (debug) Log.w(TAG, "onActivityResult() taking photo, but photo file is empty: " + photoFile.getPath());
                     return;
                 }
-                
+
                 try {
                     // prepare original
                     final File originalFile = photoFile;
@@ -306,7 +321,7 @@ public class AtlasMessagesScreen extends Activity {
                         }
                     };
                     final MessagePart originalPart = layerClient.newMessagePart(Atlas.MIME_TYPE_IMAGE_JPEG, fisOriginal, originalFile.length());
-                    
+
                     MessagePart[] previewAndSize = buildPreviewAndSize(layerClient, originalFile);
                     if (previewAndSize == null) {
                         Log.e(TAG, "onActivityResult() cannot build preview, cancel send...");
@@ -332,15 +347,15 @@ public class AtlasMessagesScreen extends Activity {
                 String resultFileName = selectedImagePath;
                 if (selectedImagePath != null) {
                     if (debug) Log.w(TAG, "onActivityResult() image from gallery selected: " + selectedImagePath);
-                } else if (selectedImageUri.getPath() != null) { 
+                } else if (selectedImageUri.getPath() != null) {
                     if (debug) Log.w(TAG, "onActivityResult() image from file picker appears... "  + selectedImageUri.getPath());
                     resultFileName = selectedImageUri.getPath();
                 }
-                
+
                 if (resultFileName != null) {
                     String mimeType = Atlas.MIME_TYPE_IMAGE_JPEG;
                     if (resultFileName.endsWith(".png")) mimeType = Atlas.MIME_TYPE_IMAGE_PNG;
-                    
+
                     // test file copy locally
                     try {
                         // create message and upload content
@@ -355,15 +370,15 @@ public class AtlasMessagesScreen extends Activity {
                                 if (debug) Log.w(TAG, "onActivityResult() cannot open stream with ContentResolver, uri: " + data.getData());
                             }
                         }
-                        
+
                         String fileName = "galleryFile" + System.currentTimeMillis() + ".jpg";
                         final File originalFile = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), fileName);
 
                         OutputStream fos = new FileOutputStream(originalFile);
                         int totalBytes = Tools.streamCopyAndClose(fis, fos);
-                        
+
                         if (debug) Log.w(TAG, "onActivityResult() copied " + totalBytes + " to file: " + originalFile.getName());
-                        
+
                         FileInputStream fisOriginal = new FileInputStream(originalFile) {
                             public void close() throws IOException {
                                 super.close();
@@ -372,7 +387,7 @@ public class AtlasMessagesScreen extends Activity {
                             }
                         };
                         final MessagePart originalPart = layerClient.newMessagePart(mimeType, fisOriginal, originalFile.length());
-                        
+
                         MessagePart[] previewAndSize = buildPreviewAndSize(layerClient, originalFile);
                         if (previewAndSize == null) {
                             Log.e(TAG, "onActivityResult() cannot build preview, cancel send...");
@@ -394,7 +409,7 @@ public class AtlasMessagesScreen extends Activity {
         }
     }
 
-    private MessagePart[] buildPreviewAndSize(final LayerClient layerClient, final File imageFile) throws FileNotFoundException, IOException, JSONException {
+    private MessagePart[] buildPreviewAndSize(final LayerClient layerClient, final File imageFile) throws IOException, JSONException {
         // prepare preview
         BitmapFactory.Options optOriginal = new BitmapFactory.Options();
         optOriginal.inJustDecodeBounds = true;
@@ -417,7 +432,7 @@ public class AtlasMessagesScreen extends Activity {
             previewWidth = (int) (1.0 * previewHeight * optOriginal.outWidth / optOriginal.outHeight);
             if (debug) Log.w(TAG, "buildPreviewAndSize() sampleSize: " + sampleSize + ", orig: " + optOriginal.outWidth + "x" + optOriginal.outHeight + ", preview: " + previewWidth + "x" + previewHeight);
         }
-        
+
         BitmapFactory.Options optsPreview = new BitmapFactory.Options();
         optsPreview.inSampleSize = sampleSize;
         //Bitmap decodedBmp = BitmapFactory.decodeFile(photoFile.getAbsolutePath(), optsPreview);
@@ -429,13 +444,13 @@ public class AtlasMessagesScreen extends Activity {
         if (debug) Log.w(TAG, "buildPreviewAndSize() decoded bitmap: " + decodedBmp.getWidth() + "x" + decodedBmp.getHeight() + ", " + decodedBmp.getByteCount() + " bytes ");
         Bitmap bmp = Bitmap.createScaledBitmap(decodedBmp, previewWidth, previewHeight, false);
         if (debug) Log.w(TAG, "buildPreviewAndSize() preview bitmap: " + bmp.getWidth() + "x" + bmp.getHeight() + ", " + bmp.getByteCount() + " bytes ");
-        
+
         String fileName = "cameraPreview" + System.currentTimeMillis() + ".jpg";
-        final File previewFile = new File(getCacheDir(), fileName); 
+        final File previewFile = new File(getCacheDir(), fileName);
         FileOutputStream fos = new FileOutputStream(previewFile);
         bmp.compress(Bitmap.CompressFormat.JPEG, 50, fos);
         fos.close();
-        
+
         FileInputStream fisPreview = new FileInputStream(previewFile) {
             public void close() throws IOException {
                 super.close();
@@ -444,7 +459,7 @@ public class AtlasMessagesScreen extends Activity {
             }
         };
         final MessagePart previewPart = layerClient.newMessagePart(Atlas.MIME_TYPE_IMAGE_JPEG_PREVIEW, fisPreview, previewFile.length());
-        
+
         // prepare dimensions
         JSONObject joDimensions = new JSONObject();
         joDimensions.put("width", optOriginal.outWidth);
@@ -463,7 +478,7 @@ public class AtlasMessagesScreen extends Activity {
         String[] projection = { MediaStore.Images.Media.DATA };
         Cursor cursor = managedQuery(uri, projection, null, null, null);
         if (cursor == null) {
-            return null;        // uri could be not suitable for ContentProviders, i.e. points to file 
+            return null;        // uri could be not suitable for ContentProviders, i.e. points to file
         }
         int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
         cursor.moveToFirst();
@@ -473,22 +488,22 @@ public class AtlasMessagesScreen extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        
+
         updateValues();
         messagesList.jumpToLastMessage();
-        
+
         // restore location tracking
         int requestLocationTimeout = 1 * 1000; // every second
         int distance = 100;
         Location loc = null;
-        if (locationManager.getProvider(LocationManager.GPS_PROVIDER) != null) { 
+        if (locationManager.getProvider(LocationManager.GPS_PROVIDER) != null) {
             loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (debug) Log.w(TAG, "onResume() location from gps: " + loc);
         }
         if (loc == null && locationManager.getProvider(LocationManager.NETWORK_PROVIDER) != null) {
             loc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
             if (debug) Log.w(TAG, "onResume() location from network: " + loc);
-        } 
+        }
         if (loc != null && loc.getTime() < System.currentTimeMillis() + LOCATION_EXPIRATION_TIME) {
             locationTracker.onLocationChanged(loc);
         }
@@ -498,27 +513,9 @@ public class AtlasMessagesScreen extends Activity {
         if (locationManager.getProvider(LocationManager.NETWORK_PROVIDER) != null) {
             locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, requestLocationTimeout, distance, locationTracker);
         }
-        
+
         app.getLayerClient().registerEventListener(messagesList).registerTypingIndicator(typingIndicator.clear());
     }
-    
-    private static final int LOCATION_EXPIRATION_TIME = 60 * 1000; // 1 minute 
-    
-    LocationListener locationTracker = new LocationListener() {
-        @Override
-        public void onLocationChanged(final Location location) {
-            uiHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    lastKnownLocation = location;
-                    if (debug) Log.d(TAG, "onLocationChanged() location: " + location);
-                }
-            });
-        }
-        public void onStatusChanged(String provider, int status, Bundle extras) {}
-        public void onProviderEnabled(String provider) {}
-        public void onProviderDisabled(String provider) {}
-    };
     
     @Override
     protected void onPause() {
