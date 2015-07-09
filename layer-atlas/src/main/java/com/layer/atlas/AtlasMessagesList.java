@@ -15,24 +15,6 @@
  */
 package com.layer.atlas;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
@@ -71,6 +53,24 @@ import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.messaging.Message;
 import com.layer.sdk.messaging.Message.RecipientStatus;
 import com.layer.sdk.messaging.MessagePart;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Oleg Orlov
@@ -447,7 +447,8 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
             calLastMessage.setTime(sentAt);
             if (false && debug) Log.d(TAG, "updateValues() item: " + item);
         }
-        cells.get(cells.size() - 1).clusterTail = true; // last one is always a tail
+        if (cells.size() > 0)
+            cells.get(cells.size() - 1).clusterTail = true; // last one is always a tail
 
         if (debug)
             Log.d(TAG, "updateValues() parts finished in: " + (System.currentTimeMillis() - started));
