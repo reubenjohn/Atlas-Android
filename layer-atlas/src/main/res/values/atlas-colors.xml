@@ -47,4 +47,6 @@
     <!-- menu item background -->
     <color name="atlas_menu_item_background_gray">#EDEDED</color>
 
+    <color name="app_color_light">#008099</color>
+    <color name="app_color_translucent">#55003399</color>
 </resources>
