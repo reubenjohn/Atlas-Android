@@ -15,8 +15,6 @@
  */
 package com.layer.atlas;
 
-import java.util.ArrayList;
-
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Color;
@@ -43,6 +41,8 @@ import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.Message;
 import com.layer.sdk.messaging.MessagePart;
 
+import java.util.ArrayList;
+
 /**
  * @author Oleg Orlov
  * @since 12 May 2015
@@ -50,23 +50,23 @@ import com.layer.sdk.messaging.MessagePart;
 public class AtlasMessageComposer extends FrameLayout {
     private static final String TAG = AtlasMessageComposer.class.getSimpleName();
     private static final boolean debug = false;
-    
+
     private EditText messageText;
     private View btnSend;
     private View btnUpload;
-    
+
     private Listener listener;
     private Conversation conv;
     private LayerClient layerClient;
-    
-    private ArrayList<MenuItem> menuItems = new ArrayList<MenuItem>(); 
-    
+
+    private ArrayList<MenuItem> menuItems = new ArrayList<MenuItem>();
+
     // styles
     private int textColor;
     private float textSize;
     private Typeface typeFace;
     private int textStyle;
-    
+
     //
     public AtlasMessageComposer(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
@@ -80,35 +80,36 @@ public class AtlasMessageComposer extends FrameLayout {
     public AtlasMessageComposer(Context context) {
         super(context);
     }
-    
+
     public void parseStyle(Context context, AttributeSet attrs, int defStyle) {
         TypedArray ta = context.getTheme().obtainStyledAttributes(attrs, R.styleable.AtlasMessageComposer, R.attr.AtlasMessageComposer, defStyle);
         this.textColor = ta.getColor(R.styleable.AtlasMessageComposer_textColor, context.getResources().getColor(R.color.atlas_text_black));
         //this.textSize  = ta.getDimension(R.styleable.AtlasMessageComposer_textSize, context.getResources().getDimension(R.dimen.atlas_text_size_general));
         this.textStyle = ta.getInt(R.styleable.AtlasMessageComposer_textStyle, Typeface.NORMAL);
-        String typeFaceName = ta.getString(R.styleable.AtlasMessageComposer_textTypeface); 
-        this.typeFace  = typeFaceName != null ? Typeface.create(typeFaceName, textStyle) : null;
+        String typeFaceName = ta.getString(R.styleable.AtlasMessageComposer_textTypeface);
+        this.typeFace = typeFaceName != null ? Typeface.create(typeFaceName, textStyle) : null;
         ta.recycle();
     }
-    
+
     /**
-     * Initialization is required to engage MessageComposer with LayerClient and Conversation 
-     * to send messages. 
-     * <p>
-     * If Conversation is not defined, "Send" action will not be able to send messages 
-     * 
-     * @param client - must be not null
+     * Initialization is required to engage MessageComposer with LayerClient and Conversation
+     * to send messages.
+     * <p/>
+     * If Conversation is not defined, "Send" action will not be able to send messages
+     *
+     * @param client       - must be not null
      * @param conversation - could be null. Conversation could be provided later using {@link #setConversation(Conversation)}
      */
     public void init(LayerClient client, Conversation conversation) {
         if (client == null) throw new IllegalArgumentException("LayerClient cannot be null");
-        if (messageText != null) throw new IllegalStateException("AtlasMessageComposer is already initialized!");
-        
+        if (messageText != null)
+            throw new IllegalStateException("AtlasMessageComposer is already initialized!");
+
         this.layerClient = client;
         this.conv = conversation;
-        
+
         LayoutInflater.from(getContext()).inflate(R.layout.atlas_message_composer, this);
-        
+
         btnUpload = findViewById(R.id.atlas_message_composer_upload);
         btnUpload.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
@@ -144,14 +145,16 @@ public class AtlasMessageComposer extends FrameLayout {
                 popupWindow.showAtLocation(v, Gravity.NO_GRAVITY, viewXYWindow[0], viewXYWindow[1] - menuHeight);
             }
         });
-        
+
         messageText = (EditText) findViewById(R.id.atlas_message_composer_text);
         messageText.addTextChangedListener(new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
             @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
 
             @Override
             public void afterTextChanged(Editable s) {
@@ -167,22 +170,22 @@ public class AtlasMessageComposer extends FrameLayout {
                 }
             }
         });
-        
+
         btnSend = findViewById(R.id.atlas_message_composer_send);
         btnSend.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                
+
                 String text = messageText.getText().toString();
-                
+
                 if (text.trim().length() > 0) {
-                    
+
                     ArrayList<MessagePart> parts = new ArrayList<MessagePart>();
                     String[] lines = text.split("\n+");
                     for (String line : lines) {
                         parts.add(layerClient.newMessagePart(line));
                     }
                     Message msg = layerClient.newMessage(parts);
-                    
+
                     if (listener != null) {
                         boolean proceed = listener.beforeSend(msg);
                         if (!proceed) return;
@@ -190,7 +193,7 @@ public class AtlasMessageComposer extends FrameLayout {
                         Log.e(TAG, "Cannot send message. Conversation is not set");
                     }
                     if (conv == null) return;
-                    
+
                     conv.send(msg);
                     messageText.setText("");
                 }
@@ -198,7 +201,7 @@ public class AtlasMessageComposer extends FrameLayout {
         });
         applyStyle();
     }
-    
+
     private void applyStyle() {
         //messageText.setTextSize(textSize);
         messageText.setTypeface(typeFace, textStyle);
@@ -213,11 +216,11 @@ public class AtlasMessageComposer extends FrameLayout {
         menuItems.add(item);
         btnUpload.setVisibility(View.VISIBLE);
     }
-    
+
     public void setListener(Listener listener) {
         this.listener = listener;
     }
-    
+
     public Conversation getConversation() {
         return conv;
     }
@@ -229,7 +232,7 @@ public class AtlasMessageComposer extends FrameLayout {
     public interface Listener {
         boolean beforeSend(Message message);
     }
-    
+
     private static class MenuItem {
         String title;
         OnClickListener clickListener;

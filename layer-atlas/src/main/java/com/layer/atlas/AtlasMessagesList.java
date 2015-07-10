@@ -26,6 +26,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,6 +35,7 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -104,11 +106,9 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
     };
     private BaseAdapter messagesAdapter;
-    private ArrayList<Cell> cells = new ArrayList<Cell>();
+    private List<Uri> messageIds = new ArrayList<Uri>();
     private LayerClient client;
     private Conversation conv;
-    private Message latestReadMessage = null;
-    private Message latestDeliveredMessage = null;
     private ItemClickListener clickListener;
     private int myBubbleColor;
     private int myTextColor;
@@ -126,6 +126,11 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private boolean isReverseOrder = false;
     private boolean showSystemMessages = false;
     private long messageUpdateSentAt = 0;
+    private static final LinearLayout.LayoutParams myMessageLayoutParams
+            = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+    private LinearLayout.LayoutParams theirMessageLayoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
     private final Handler refreshHandler = new Handler() {
         public void handleMessage(android.os.Message msg) {
             long started = System.currentTimeMillis();
@@ -133,10 +138,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                 if (msg.arg1 == MESSAGE_REFRESH_UPDATE_ALL) {
                     updateValues();
                 } else if (msg.arg1 == MESSAGE_REFRESH_UPDATE_DELIVERY) {
-                    LayerClient client = (LayerClient) msg.obj;
-                    boolean changed = updateDeliveryStatus(client.getMessages(conv));
-                    if (changed) messagesAdapter.notifyDataSetInvalidated();
-                    if (debug) Log.w(TAG, "refreshHandler() delivery status changed: " + changed);
+                    if (debug) Log.w(TAG, "refreshHandler() updating delivery status");
                 }
                 if (msg.arg2 > 0) {
                     if (isReverseOrder)
@@ -152,6 +154,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
 
     };
+    ;
 
     public AtlasMessagesList(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
@@ -217,6 +220,8 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     }
 
     public void init(final LayerClient layerClient, final Atlas.ParticipantProvider participantProvider) {
+        myMessageLayoutParams.gravity = Gravity.RIGHT;
+        theirMessageLayoutParams.gravity = Gravity.LEFT;
         if (layerClient == null) throw new IllegalArgumentException("LayerClient cannot be null");
         if (participantProvider == null)
             throw new IllegalArgumentException("ParticipantProvider cannot be null");
@@ -231,147 +236,238 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         messagesList.setAdapter(messagesAdapter = new BaseAdapter() {
 
             public View getView(int position, View convertView, ViewGroup parent) {
-                final Cell cell = getItem(position);
-                MessagePart part = cell.messagePart;
-                String userId = part.getMessage().getSender().getUserId();
 
-                boolean myMessage = client.getAuthenticatedUserId().equals(userId);
+                Message message = getItem(position);
+                ArrayList<Cell> messageCells = new ArrayList<Cell>();
+                messageCells.clear();
+                buildCellForMessage(message, messageCells);
+                updateMessagePartValues(messageCells);
 
+                LinearLayout cellsContainer;
                 if (convertView == null) {
                     convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.atlas_view_messages_convert, parent, false);
+                    cellsContainer = (LinearLayout) convertView.findViewById(R.id.atlas_view_messages_cell_container);
+                } else {
+                    cellsContainer = (LinearLayout) convertView.findViewById(R.id.atlas_view_messages_cell_container);
+                    cellsContainer.removeAllViews();
                 }
 
-                View spacerTop = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_top);
-                spacerTop.setVisibility(cell.clusterItemId == cell.clusterHeadItemId && !cell.timeHeader ? View.VISIBLE : View.GONE);
+                for (Cell cell : messageCells) {
+                    MessagePart part = cell.messagePart;
+                    String userId = part.getMessage().getSender().getUserId();
 
-                View spacerBottom = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_bottom);
-                spacerBottom.setVisibility(cell.clusterTail ? View.VISIBLE : View.GONE);
+                    boolean myMessage = client.getAuthenticatedUserId().equals(userId);
 
-                // format date
-                View timeBar = convertView.findViewById(R.id.atlas_view_messages_convert_timebar);
-                TextView timeBarDay = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_timebar_day);
-                TextView timeBarTime = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_timebar_time);
-                if (cell.timeHeader) {
+//
+//                    View spacerTop = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_top);
+//                    spacerTop.setVisibility(cell.clusterItemId == cell.clusterHeadItemId && !cell.timeHeader ? View.VISIBLE : View.GONE);
+//
+//                    View spacerBottom = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_bottom);
+//                    spacerBottom.setVisibility(cell.clusterTail ? View.VISIBLE : View.GONE);
 
-                    Calendar cal = Calendar.getInstance();
-                    cal.set(Calendar.HOUR_OF_DAY, 0);
-                    cal.set(Calendar.MINUTE, 0);
-                    cal.set(Calendar.SECOND, 0);
-                    long todayMidnight = cal.getTimeInMillis();
-                    long yesterMidnight = todayMidnight - Tools.TIME_HOURS_24;
-                    long weekAgoMidnight = todayMidnight - Tools.TIME_HOURS_24 * 7;
-                    Date sentAt = cell.messagePart.getMessage().getSentAt();
-                    if (sentAt == null) sentAt = new Date();
+                    // format date
+                    View timeBar = convertView.findViewById(R.id.atlas_view_messages_convert_timebar);
+                    TextView timeBarDay = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_timebar_day);
+                    TextView timeBarTime = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_timebar_time);
+                    if (cell.timeHeader) {
 
-                    String timeBarTimeText = timeFormat.format(sentAt.getTime());
-                    String timeBarDayText = null;
-                    if (sentAt.getTime() > todayMidnight) {
-                        timeBarDayText = "Today";
-                    } else if (sentAt.getTime() > yesterMidnight) {
-                        timeBarDayText = "Yesterday";
-                    } else if (sentAt.getTime() > weekAgoMidnight) {
-                        cal.setTime(sentAt);
-                        timeBarDayText = Tools.TIME_WEEKDAYS_NAMES[cal.get(Calendar.DAY_OF_WEEK) - 1];
+                        Calendar cal = Calendar.getInstance();
+                        cal.set(Calendar.HOUR_OF_DAY, 0);
+                        cal.set(Calendar.MINUTE, 0);
+                        cal.set(Calendar.SECOND, 0);
+                        long todayMidnight = cal.getTimeInMillis();
+                        long yesterMidnight = todayMidnight - Tools.TIME_HOURS_24;
+                        long weekAgoMidnight = todayMidnight - Tools.TIME_HOURS_24 * 7;
+                        Date sentAt = cell.messagePart.getMessage().getSentAt();
+                        if (sentAt == null) sentAt = new Date();
+
+                        String timeBarTimeText = timeFormat.format(sentAt.getTime());
+                        String timeBarDayText = null;
+                        if (sentAt.getTime() > todayMidnight) {
+                            timeBarDayText = "Today";
+                        } else if (sentAt.getTime() > yesterMidnight) {
+                            timeBarDayText = "Yesterday";
+                        } else if (sentAt.getTime() > weekAgoMidnight) {
+                            cal.setTime(sentAt);
+                            timeBarDayText = Tools.TIME_WEEKDAYS_NAMES[cal.get(Calendar.DAY_OF_WEEK) - 1];
+                        } else {
+                            timeBarDayText = Tools.sdfDayOfWeek.format(sentAt);
+                        }
+                        timeBarDay.setText(timeBarDayText);
+                        timeBarTime.setText(timeBarTimeText);
+                        timeBar.setVisibility(View.VISIBLE);
                     } else {
-                        timeBarDayText = Tools.sdfDayOfWeek.format(sentAt);
+                        timeBar.setVisibility(View.GONE);
                     }
-                    timeBarDay.setText(timeBarDayText);
-                    timeBarTime.setText(timeBarTimeText);
-                    timeBar.setVisibility(View.VISIBLE);
-                } else {
-                    timeBar.setVisibility(View.GONE);
+
+                    View avatarContainer = convertView.findViewById(R.id.atlas_view_messages_convert_avatar_container);
+                    TextView textAvatar = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_initials);
+                    View spacerRight = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_right);
+                    avatarContainer.requestLayout();
+                    if (myMessage) {
+                        spacerRight.setVisibility(View.GONE);
+                        avatarContainer.setVisibility(View.GONE);
+                        timeBar.setLayoutParams(myMessageLayoutParams);
+                    } else {
+                        spacerRight.setVisibility(View.VISIBLE);
+                        Atlas.Participant participant = participantProvider.getParticipant(userId);
+                        String displayText = participant != null ? Atlas.getFullName(participant) : "";
+                        textAvatar.setText(displayText);
+                        avatarContainer.setVisibility(View.VISIBLE);
+                        timeBar.setLayoutParams(theirMessageLayoutParams);
+                    }
+
+                    // mark unsent messages
+                    View cellContainer = convertView.findViewById(R.id.atlas_view_messages_cell_container);
+                    cellContainer.setAlpha((myMessage && !cell.messagePart.getMessage().isSent())
+                            ? CELL_CONTAINER_ALPHA_UNSENT : CELL_CONTAINER_ALPHA_SENT);
+
+                    // delivery receipt check
+                    TextView receiptView = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_delivery_receipt);
+                    receiptView.setVisibility(View.GONE);
+
+                    // Display delivery receipt for only our messages
+                    if (client.getAuthenticatedUserId().equals(message.getSender().getUserId())) {
+                        receiptView.setVisibility(View.VISIBLE); // Since it is our message
+
+                        if (!message.isSent()) {
+                            receiptView.setText("Sending");
+                        }
+                        Map<String, RecipientStatus> statuses = message.getRecipientStatus();
+                        if (statuses == null || statuses.size() == 0) {
+                            receiptView.setText("Unknown");
+                        } else {// TODO Do not update delivery status if the statuses size is more that MAX_DELIVERY_UPDATE_PARTICIPANT_SIZE
+                            for (Map.Entry<String, RecipientStatus> entry : statuses.entrySet()) {
+                                // our read-status doesn't matter
+                                if (entry.getKey().equals(client.getAuthenticatedUserId()))
+                                    continue;
+
+                                if (entry.getValue() == RecipientStatus.READ) {
+                                    receiptView.setText("Read");
+                                    break;
+                                }
+                                if (entry.getValue() == RecipientStatus.DELIVERED) {
+                                    receiptView.setText("Delivered");
+                                }
+                            }
+                        }
+                    } else {
+                        receiptView.setVisibility(GONE);
+                    }
+
+                    // processing cell
+                    addCell(cellsContainer, cell);
+
+                    // mark displayed message as read
+                    if (!client.getAuthenticatedUserId().equals(message.getSender().getUserId())) {
+                        message.markAsRead();
+                    }
+
+                    // Commented out to help with performance
+//                    timeBarDay.setTextColor(dateTextColor);
+//                    timeBarTime.setTextColor(dateTextColor);
+//                    textAvatar.setTextColor(avatarTextColor);
+//                    ((GradientDrawable) textAvatar.getBackground()).setColor(avatarBackgroundColor);
                 }
-
-                TextView textAvatar = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_initials);
-                View spacerRight = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_right);
-                if (myMessage) {
-                    spacerRight.setVisibility(View.GONE);
-                    textAvatar.setVisibility(View.INVISIBLE);
-                } else {
-                    spacerRight.setVisibility(View.VISIBLE);
-                    Atlas.Participant participant = participantProvider.getParticipant(userId);
-                    String displayText = participant != null ? Atlas.getInitials(participant) : "";
-                    textAvatar.setText(displayText);
-                    textAvatar.setVisibility(View.VISIBLE);
-                }
-
-                // mark unsent messages
-                View cellContainer = convertView.findViewById(R.id.atlas_view_messages_cell_container);
-                cellContainer.setAlpha((myMessage && !cell.messagePart.getMessage().isSent())
-                        ? CELL_CONTAINER_ALPHA_UNSENT : CELL_CONTAINER_ALPHA_SENT);
-
-                // delivery receipt check
-                TextView receiptView = (TextView) convertView.findViewById(R.id.atlas_view_messages_convert_delivery_receipt);
-                receiptView.setVisibility(View.GONE);
-                if (latestDeliveredMessage != null && latestDeliveredMessage.getId().equals(cell.messagePart.getMessage().getId())) {
-                    receiptView.setVisibility(View.VISIBLE);
-                    receiptView.setText("Delivered");
-                }
-                if (latestReadMessage != null && latestReadMessage.getId().equals(cell.messagePart.getMessage().getId())) {
-                    receiptView.setVisibility(View.VISIBLE);
-                    receiptView.setText("Read");
-                }
-
-                // processing cell
-                bindCell(convertView, cell);
-
-                // mark displayed message as read
-                Message msg = part.getMessage();
-                if (!client.getAuthenticatedUserId().equals(msg.getSender().getUserId())) {
-                    msg.markAsRead();
-                }
-
-                timeBarDay.setTextColor(dateTextColor);
-                timeBarTime.setTextColor(dateTextColor);
-                textAvatar.setTextColor(avatarTextColor);
-                ((GradientDrawable) textAvatar.getBackground()).setColor(avatarBackgroundColor);
-
                 return convertView;
             }
 
-            private void bindCell(View convertView, final Cell cell) {
-
-                ViewGroup cellContainer = (ViewGroup) convertView.findViewById(R.id.atlas_view_messages_cell_container);
-
-                View cellRootView = cell.onBind(cellContainer);
-                boolean alreadyInContainer = false;
-                // cleanUp container
-                cellRootView.setVisibility(View.VISIBLE);
-                for (int iChild = 0; iChild < cellContainer.getChildCount(); iChild++) {
-                    View child = cellContainer.getChildAt(iChild);
-                    if (child != cellRootView) {
-                        child.setVisibility(View.GONE);
-                    } else {
-                        alreadyInContainer = true;
+            private void updateMessagePartValues(List<Cell> cellsList) {
+                // calculate heads/tails
+                int currentItem = 0;
+                int clusterId = currentItem;
+                String currentUser = null;
+                long lastMessageTime = 0;
+                Calendar calLastMessage = Calendar.getInstance();
+                Calendar calCurrent = Calendar.getInstance();
+                long clusterTimeSpan = 60 * 1000; // 1 minute
+                long oneHourSpan = 60 * 60 * 1000; // 1 hour
+                for (int i = 0; i < cellsList.size(); i++) {
+                    Cell item = cellsList.get(i);
+                    boolean newCluster = false;
+                    if (currentUser != null) {
+                        if (!currentUser.equals(item.messagePart.getMessage().getSender().getUserId())) {
+                            newCluster = true;
+                        }
                     }
+                    Date sentAt = item.messagePart.getMessage().getSentAt();
+                    if (sentAt == null) sentAt = new Date();
+
+                    if (sentAt.getTime() - lastMessageTime > clusterTimeSpan) {
+                        newCluster = true;
+                    }
+
+                    if (newCluster) {
+                        clusterId = currentItem;
+                        if (i > 0) cellsList.get(i - 1).clusterTail = true;
+                    }
+
+                    item.timeHeader = true;
+//                    // check time header is needed
+//                    if (sentAt.getTime() - lastMessageTime > oneHourSpan) {
+//                        item.timeHeader = true;
+//                    }
+//                    calCurrent.setTime(sentAt);
+//                    if (calCurrent.get(Calendar.DAY_OF_YEAR) != calLastMessage.get(Calendar.DAY_OF_YEAR)) {
+//                        item.timeHeader = true;
+//                    }
+
+                    item.clusterHeadItemId = clusterId;
+                    item.clusterItemId = currentItem++;
+
+                    currentUser = item.messagePart.getMessage().getSender().getUserId();
+                    lastMessageTime = sentAt.getTime();
+                    calLastMessage.setTime(sentAt);
+                    if (false && debug) Log.d(TAG, "updateValues() item: " + item);
                 }
-                if (!alreadyInContainer) {
-                    cellContainer.addView(cellRootView);
-                }
+                if (cellsList.size() > 0)
+                    cellsList.get(cellsList.size() - 1).clusterTail = true; // last one is always a tail
+            }
+
+            private void addCell(LinearLayout cellsContainer, final Cell cell) {
+
+
+                View cellRootView = cell.onBind(cellsContainer);
+
+//                boolean alreadyInContainer = false;
+//                // cleanUp container
+//                cellRootView.setVisibility(View.VISIBLE);
+//                for (int iChild = 0; iChild < cellsContainer.getChildCount(); iChild++) {
+//                    View child = cellsContainer.getChildAt(iChild);
+//                    if (child != cellRootView) {
+//                        child.setVisibility(View.GONE);
+//                    } else {
+//                        alreadyInContainer = true;
+//                    }
+//                }
+//                if (!alreadyInContainer) {
+                cellsContainer.addView(cellRootView);
+//                }
             }
 
             public long getItemId(int position) {
                 return position;
             }
 
-            public AtlasMessagesList.Cell getItem(int position) {
+            public Message getItem(int position) {
                 if (isReverseOrder)
-                    return cells.get(cells.size() - position - 1);
+                    return layerClient.getMessage(messageIds.get(getCount() - position - 1));
                 else
-                    return cells.get(position);
+                    return layerClient.getMessage(messageIds.get(position));
             }
 
             public int getCount() {
-                return cells.size();
+                return messageIds.size();
             }
 
         });
 
+        // TODO Provide method of detecting which message part was clicked
         messagesList.setOnItemClickListener(new OnItemClickListener() {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Cell item = cells.get(position);
+                Uri item = messageIds.get(position);
                 if (clickListener != null) {
-                    clickListener.onItemClick(item);
+                    clickListener.onItemClick(layerClient.getMessage(item));
                 }
             }
         });
@@ -461,130 +557,18 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
 
         long started = System.currentTimeMillis();
 
-        List<Message> messages = client.getMessages(conv);
-        cells.clear();
-        if (messages.isEmpty()) return;
+        messageIds.clear();
+        messageIds = client.getMessageIds(conv);
+        if (messageIds.isEmpty()) return;
 
-        latestReadMessage = null;
-        latestDeliveredMessage = null;
-
-        ArrayList<Cell> messageItems = new ArrayList<AtlasMessagesList.Cell>();
-        for (Message message : messages) {
-            // System messages have `null` user ID
-            if (!showSystemMessages && message.getSender().getUserId() == null) continue;
-
-            messageItems.clear();
-            buildCellForMessage(message, messageItems);
-            cells.addAll(messageItems);
-        }
-
-        updateDeliveryStatus(messages);
-
-        // calculate heads/tails
-        int currentItem = 0;
-        int clusterId = currentItem;
-        String currentUser = null;
-        long lastMessageTime = 0;
-        Calendar calLastMessage = Calendar.getInstance();
-        Calendar calCurrent = Calendar.getInstance();
-        long clusterTimeSpan = 60 * 1000; // 1 minute
-        long oneHourSpan = 60 * 60 * 1000; // 1 hour
-        for (int i = 0; i < cells.size(); i++) {
-            Cell item = cells.get(i);
-            boolean newCluster = false;
-            if (currentUser != null) {
-                if (!currentUser.equals(item.messagePart.getMessage().getSender().getUserId())) {
-                    newCluster = true;
-                }
-            }
-            Date sentAt = item.messagePart.getMessage().getSentAt();
-            if (sentAt == null) sentAt = new Date();
-
-            if (sentAt.getTime() - lastMessageTime > clusterTimeSpan) {
-                newCluster = true;
-            }
-
-            if (newCluster) {
-                clusterId = currentItem;
-                if (i > 0) cells.get(i - 1).clusterTail = true;
-            }
-
-            // check time header is needed
-            if (sentAt.getTime() - lastMessageTime > oneHourSpan) {
-                item.timeHeader = true;
-            }
-            calCurrent.setTime(sentAt);
-            if (calCurrent.get(Calendar.DAY_OF_YEAR) != calLastMessage.get(Calendar.DAY_OF_YEAR)) {
-                item.timeHeader = true;
-            }
-
-            item.clusterHeadItemId = clusterId;
-            item.clusterItemId = currentItem++;
-
-            currentUser = item.messagePart.getMessage().getSender().getUserId();
-            lastMessageTime = sentAt.getTime();
-            calLastMessage.setTime(sentAt);
-            if (false && debug) Log.d(TAG, "updateValues() item: " + item);
-        }
-        if (cells.size() > 0)
-            cells.get(cells.size() - 1).clusterTail = true; // last one is always a tail
+        // TODO Remove tail spacing from xml layout
+        // TODO Remove boolean from cell for tail and time bar
+        // TODO Remove boolean check in getView for tail and time bar
 
         if (debug)
             Log.d(TAG, "updateValues() parts finished in: " + (System.currentTimeMillis() - started));
         messagesAdapter.notifyDataSetChanged();
 
-    }
-
-    private boolean updateDeliveryStatus(List<Message> messages) {
-        if (debug) Log.w(TAG, "updateDeliveryStatus() checking messages:   " + messages.size());
-        Message oldLatestDeliveredMessage = latestDeliveredMessage;
-        Message oldLatestReadMessage = latestReadMessage;
-        // reset before scan
-        latestDeliveredMessage = null;
-        latestReadMessage = null;
-
-        for (Message message : messages) {
-            // only our messages
-            if (client.getAuthenticatedUserId().equals(message.getSender().getUserId())) {
-                if (!message.isSent()) continue;
-                Map<String, RecipientStatus> statuses = message.getRecipientStatus();
-                if (statuses == null || statuses.size() == 0) continue;
-                for (Map.Entry<String, RecipientStatus> entry : statuses.entrySet()) {
-                    // our read-status doesn't matter
-                    if (entry.getKey().equals(client.getAuthenticatedUserId())) continue;
-
-                    if (entry.getValue() == RecipientStatus.READ) {
-                        latestDeliveredMessage = message;
-                        latestReadMessage = message;
-                        break;
-                    }
-                    if (entry.getValue() == RecipientStatus.DELIVERED) {
-                        latestDeliveredMessage = message;
-                    }
-                }
-            }
-        }
-        boolean changed = false;
-        if (oldLatestDeliveredMessage == null && latestDeliveredMessage != null) changed = true;
-        else if (oldLatestDeliveredMessage != null && latestDeliveredMessage == null)
-            changed = true;
-        else if (oldLatestDeliveredMessage != null && latestDeliveredMessage != null
-                && !oldLatestDeliveredMessage.getId().equals(latestDeliveredMessage.getId()))
-            changed = true;
-
-        if (oldLatestReadMessage == null && latestReadMessage != null) changed = true;
-        else if (oldLatestReadMessage != null && latestReadMessage == null) changed = true;
-        else if (oldLatestReadMessage != null && latestReadMessage != null
-                && !oldLatestReadMessage.getId().equals(latestReadMessage.getId())) changed = true;
-
-        if (debug)
-            Log.w(TAG, "updateDeliveryStatus() read status changed: " + (changed ? "yes" : "no"));
-        if (debug)
-            Log.w(TAG, "updateDeliveryStatus() latestRead:          " + (latestReadMessage != null ? latestReadMessage.getSentAt() + ", id: " + latestReadMessage.getId() : "null"));
-        if (debug)
-            Log.w(TAG, "updateDeliveryStatus() latestDelivered:     " + (latestDeliveredMessage != null ? latestDeliveredMessage.getSentAt() + ", id: " + latestDeliveredMessage.getId() : "null"));
-
-        return changed;
     }
 
     @Override
@@ -624,7 +608,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         super.onDetachedFromWindow();
 
         if (debug) Log.d(TAG, "onDetachedFromWindow() clean cells and views... ");
-        cells.clear();
+        messageIds.clear();
         messagesAdapter.notifyDataSetChanged();
         messagesList.removeAllViewsInLayout();
     }
@@ -633,7 +617,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         if (isReverseOrder)
             messagesList.smoothScrollToPosition(0);
         else
-            messagesList.smoothScrollToPosition(cells.size() - 1);
+            messagesList.smoothScrollToPosition(messageIds.size() - 1);
     }
 
     public Conversation getConversation() {
@@ -667,7 +651,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     }
 
     public interface ItemClickListener {
-        void onItemClick(Cell item);
+        void onItemClick(Message item);
     }
 
     private static class DownloadQueue {
@@ -891,10 +875,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
             MessagePart part = messagePart;
             Cell cell = this;
 
-            View cellText = Tools.findChildById(cellContainer, R.id.atlas_view_messages_cell_text);
-            if (cellText == null) {
-                cellText = LayoutInflater.from(cellContainer.getContext()).inflate(R.layout.atlas_view_messages_cell_text, cellContainer, false);
-            }
+            View cellText = LayoutInflater.from(cellContainer.getContext()).inflate(R.layout.atlas_view_messages_cell_text, cellContainer, false);
 
             if (text == null) {
                 if (Atlas.MIME_TYPE_TEXT.equals(part.getMimeType())) {

@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2015 Layer. All rights reserved.
+<?xml version="1.0" encoding="utf-8"?><!-- Copyright 2015 Layer. All rights reserved.
     
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -13,112 +12,94 @@
      See the License for the specific language governing permissions and
      limitations under the License.    
 -->
-<LinearLayout xmlns:tools="http://schemas.android.com/tools"
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    
-    android:orientation="vertical"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
-    
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:id="@+id/atlas_view_messages_convert_avatar_container"
+        android:layout_width="86dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="-4dp"
+        android:layout_marginLeft="16dp"
+        android:background="@drawable/atlas_shape_rounded16_gray_no_bottom"
+        android:padding="3sp"
+        android:layout_marginTop="4dp">
+
+        <TextView
+            android:id="@+id/atlas_view_messages_convert_initials"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textSize="@dimen/atlas_text_size_smaller2"
+            android:textStyle="bold" />
+
+    </FrameLayout>
+
     <LinearLayout
-        android:id="@+id/atlas_view_messages_convert_timebar"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:orientation="horizontal"
-        >
-        <TextView 
-            android:id="@+id/atlas_view_messages_convert_timebar_day"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginRight="2dp"
-            android:gravity="center_vertical|right"
-            android:textSize="@dimen/atlas_text_size_smaller2"
-            android:textColor="@color/atlas_text_gray"
-            android:textStyle="bold"
-            android:text="Yesterday"
-            />
-        <TextView 
-            android:id="@+id/atlas_view_messages_convert_timebar_time"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginLeft="2dp"
-            android:gravity="center_vertical|left"
-            android:textSize="@dimen/atlas_text_size_smaller2"
-            android:textColor="@color/atlas_text_gray"
-            android:text="09:08"
-            />
-    </LinearLayout>
-    
-    <View 
-        android:id="@+id/atlas_view_messages_convert_spacer_top"
-        android:layout_width="match_parent"
-        android:layout_height="7dp"
-        />
-    
-    <LinearLayout 
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="1dp"    
-        android:paddingBottom="1dp"    
-        
         android:orientation="horizontal"
-        >
-        
+        android:paddingBottom="1dp"
+
+        android:paddingTop="1dp">
+
         <!-- avatar placeholder -->
-        <FrameLayout 
-            android:id="@+id/atlas_view_messages_convert_avatar_container"
-            android:layout_width="24dp" 
-            android:layout_height="24dp"
-            android:layout_marginLeft="8dp"
-            android:layout_gravity="bottom"
-            >
-            <TextView 
-                android:id="@+id/atlas_view_messages_convert_initials"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:textSize="@dimen/atlas_text_size_smaller2"
-                android:background="@drawable/atlas_shape_circle_gray"
-                android:text="TS" 
-                android:gravity="center" />
-            
-        </FrameLayout>
-    	
+
         <!--  android:background="#D1FFF1" - blue -->
-    
-        <FrameLayout
+
+        <LinearLayout
             android:id="@+id/atlas_view_messages_cell_container"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginRight="8dp"
             android:layout_marginLeft="8dp"
-            />
-            
-        <View 
+            android:layout_marginRight="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical" />
+
+        <View
             android:id="@+id/atlas_view_messages_convert_spacer_right"
             android:layout_width="32dp"
-            android:layout_height="match_parent"
-            />
-    
+            android:layout_height="match_parent" />
+
     </LinearLayout>
-    
-    <TextView 
-        android:id="@+id/atlas_view_messages_convert_delivery_receipt"
+
+    <LinearLayout
+        android:id="@+id/atlas_view_messages_convert_timebar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginRight="12dp"
-        android:layout_gravity="right"
-        android:textColor="@color/atlas_text_gray"
-        android:textSize="@dimen/atlas_text_size_smaller2"
-        android:text="Read at 10:12 AM"
-        />
-    
-    <View 
-        android:id="@+id/atlas_view_messages_convert_spacer_bottom"
-        android:layout_width="match_parent"
-        android:layout_height="7dp"
-        />
-    
+        android:layout_gravity="center_horizontal"
+        android:orientation="horizontal"
+        android:paddingLeft="16dp"
+        android:paddingRight="8dp">
+
+        <TextView
+            android:id="@+id/atlas_view_messages_convert_delivery_receipt"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="right"
+            android:layout_marginRight="4dp"
+            android:textColor="@color/atlas_text_gray"
+            android:textSize="@dimen/atlas_text_size_smaller2" />
+
+        <TextView
+            android:id="@+id/atlas_view_messages_convert_timebar_day"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginRight="4dp"
+            android:gravity="center_vertical|right"
+            android:textColor="@color/atlas_text_gray"
+            android:textSize="@dimen/atlas_text_size_smaller2" />
+
+        <TextView
+            android:id="@+id/atlas_view_messages_convert_timebar_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical|left"
+            android:textColor="@color/atlas_text_gray"
+            android:textSize="@dimen/atlas_text_size_smaller2" />
+    </LinearLayout>
+
 </LinearLayout>
