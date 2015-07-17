@@ -93,6 +93,9 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private static final BitmapDrawable EMPTY_DRAWABLE = new BitmapDrawable(Bitmap.createBitmap(new int[]{Color.TRANSPARENT}, 1, 1, Bitmap.Config.ALPHA_8));
     private static final Atlas.ImageLoader imageLoader = new Atlas.ImageLoader();
     private static final DownloadQueue downloadQueue = new DownloadQueue();
+    private static final LinearLayout.LayoutParams myMessageLayoutParams
+            = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
     private final DateFormat timeFormat;
     private ListView messagesList;
     private final Runnable INVALIDATE_VIEW = new Runnable() {
@@ -106,7 +109,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
     };
     private BaseAdapter messagesAdapter;
-    private List<Uri> messageIds = new ArrayList<Uri>();
+    private List<Uri> messageIds = new ArrayList<>();
     private LayerClient client;
     private Conversation conv;
     private ItemClickListener clickListener;
@@ -126,11 +129,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private boolean isReverseOrder = false;
     private boolean showSystemMessages = false;
     private long messageUpdateSentAt = 0;
-    private static final LinearLayout.LayoutParams myMessageLayoutParams
-            = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT);
-    private LinearLayout.LayoutParams theirMessageLayoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT);
     private final Handler refreshHandler = new Handler() {
         public void handleMessage(android.os.Message msg) {
             long started = System.currentTimeMillis();
@@ -154,7 +152,8 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
 
     };
-    ;
+    private LinearLayout.LayoutParams theirMessageLayoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
 
     public AtlasMessagesList(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
@@ -238,7 +237,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
             public View getView(int position, View convertView, ViewGroup parent) {
 
                 Message message = getItem(position);
-                ArrayList<Cell> messageCells = new ArrayList<Cell>();
+                ArrayList<Cell> messageCells = new ArrayList<>();
                 messageCells.clear();
                 buildCellForMessage(message, messageCells);
                 updateMessagePartValues(messageCells);
@@ -282,7 +281,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                         if (sentAt == null) sentAt = new Date();
 
                         String timeBarTimeText = timeFormat.format(sentAt.getTime());
-                        String timeBarDayText = null;
+                        String timeBarDayText;
                         if (sentAt.getTime() > todayMidnight) {
                             timeBarDayText = "Today";
                         } else if (sentAt.getTime() > yesterMidnight) {
@@ -418,6 +417,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                     currentUser = item.messagePart.getMessage().getSender().getUserId();
                     lastMessageTime = sentAt.getTime();
                     calLastMessage.setTime(sentAt);
+                    //noinspection PointlessBooleanExpression
                     if (false && debug) Log.d(TAG, "updateValues() item: " + item);
                 }
                 if (cellsList.size() > 0)
@@ -505,7 +505,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
 
     protected void buildCellForMessage(Message msg, ArrayList<Cell> destination) {
 
-        final ArrayList<MessagePart> parts = new ArrayList<MessagePart>(msg.getMessageParts());
+        final ArrayList<MessagePart> parts = new ArrayList<>(msg.getMessageParts());
 
         for (int partNo = 0; partNo < parts.size(); partNo++) {
             final MessagePart part = parts.get(partNo);
@@ -545,6 +545,7 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                 destination.add(new GeoCell(part));
             } else {
                 Cell cellData = new TextCell(part);
+                //noinspection PointlessBooleanExpression
                 if (false && debug) Log.w(TAG, "cellForMessage() default item: " + cellData);
                 destination.add(cellData);
             }
@@ -657,13 +658,13 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private static class DownloadQueue {
         private static final String TAG = DownloadQueue.class.getSimpleName();
 
-        final ArrayList<Entry> queue = new ArrayList<AtlasMessagesList.DownloadQueue.Entry>();
-        final HashMap<String, Entry> url2Entry = new HashMap<String, Entry>();
+        final ArrayList<Entry> queue = new ArrayList<>();
+        final HashMap<String, Entry> url2Entry = new HashMap<>();
         private volatile Entry inProgress = null;
         private Thread workingThread = new Thread(new Runnable() {
             public void run() {
                 while (true) {
-                    Entry next = null;
+                    Entry next;
                     synchronized (queue) {
                         while (queue.size() == 0) {
                             try {
