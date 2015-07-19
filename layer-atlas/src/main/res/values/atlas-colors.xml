@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2015 Layer. All rights reserved.
+<?xml version="1.0" encoding="utf-8"?><!-- Copyright 2015 Layer. All rights reserved.
     
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -33,6 +32,7 @@
     <color name="atlas_background_blue_dark">#198BB8</color>
     <color name="atlas_background_gray">#EBEBEB</color>
     <color name="atlas_background_transparent">#00FFFFFF</color>
+    <color name="atlas_background_white_translucent">#DDEEEE</color>
 
     <color name="atlas_qr_mask">#80000000</color>
     <color name="atlas_qr_laser">#FF2196F3</color>
@@ -47,6 +47,6 @@
     <!-- menu item background -->
     <color name="atlas_menu_item_background_gray">#EDEDED</color>
 
-    <color name="app_color_analogous_light">#83c1fd</color>
+    <color name="app_color_analogous_light">#FF83c1fd</color>
     <color name="app_color_translucent">#55047ef3</color>
 </resources>

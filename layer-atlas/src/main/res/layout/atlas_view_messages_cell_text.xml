@@ -24,39 +24,29 @@
         android:id="@+id/atlas_view_messages_convert_text_counterparty"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="left|center_vertical"
-        android:background="@drawable/atlas_shape_rounded16_gray"
-        android:minHeight="34dp"
-        android:minWidth="100dp"
-        android:paddingBottom="6dp"
+
         android:paddingLeft="12dp"
-
         android:paddingRight="12dp"
-        android:paddingTop="4dp"
 
-        android:text="Sample Text Sample Text Very \nLong About 300 Symbols Like\n two full-sized Tweets"
+        android:text="Tiny text"
         android:textSize="16sp"
 
-        />
+        android:layout_marginTop="-2sp" />
 
     <TextView
         android:id="@+id/atlas_view_messages_convert_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="right|center_vertical"
-        android:background="@drawable/atlas_shape_rounded16_blue"
+        android:layout_gravity="right"
         android:gravity="right|center_vertical"
-        android:minHeight="34dp"
-        android:paddingBottom="6dp"
 
         android:paddingLeft="12dp"
         android:paddingRight="12dp"
-        android:paddingTop="4dp"
-
         android:text="attach, type: image/jpeg, size: 1071119\nSample Text Very \nLong About 300 Symbols Like\n two full-sized Tweets"
         android:textColor="@color/atlas_text_white"
-        android:textSize="16sp"
 
-        android:visibility="gone" />
+        android:textSize="16sp"
+        android:visibility="gone"
+        android:layout_marginTop="-2sp" />
 
 </FrameLayout>

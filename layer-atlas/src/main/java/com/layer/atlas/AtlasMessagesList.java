@@ -19,9 +19,9 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.util.AttributeSet;
@@ -93,9 +93,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
     private static final BitmapDrawable EMPTY_DRAWABLE = new BitmapDrawable(Bitmap.createBitmap(new int[]{Color.TRANSPARENT}, 1, 1, Bitmap.Config.ALPHA_8));
     private static final Atlas.ImageLoader imageLoader = new Atlas.ImageLoader();
     private static final DownloadQueue downloadQueue = new DownloadQueue();
-    private static final LinearLayout.LayoutParams myMessageLayoutParams
-            = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT);
     private final DateFormat timeFormat;
     private ListView messagesList;
     private final Runnable INVALIDATE_VIEW = new Runnable() {
@@ -152,7 +149,10 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
         }
 
     };
-    private LinearLayout.LayoutParams theirMessageLayoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+    private static LinearLayout.LayoutParams myMessageLayoutParams
+            = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+    private static LinearLayout.LayoutParams theirMessageLayoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT);
 
     public AtlasMessagesList(Context context, AttributeSet attrs, int defStyle) {
@@ -242,11 +242,14 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                 buildCellForMessage(message, messageCells);
                 updateMessagePartValues(messageCells);
 
+                LinearLayout messageContainerView;
                 LinearLayout cellsContainer;
                 if (convertView == null) {
                     convertView = LayoutInflater.from(parent.getContext()).inflate(R.layout.atlas_view_messages_convert, parent, false);
+                    messageContainerView = (LinearLayout) convertView.findViewById(R.id.container_atlas_view_messages_convert_view);
                     cellsContainer = (LinearLayout) convertView.findViewById(R.id.atlas_view_messages_cell_container);
                 } else {
+                    messageContainerView = (LinearLayout) convertView.findViewById(R.id.container_atlas_view_messages_convert_view);
                     cellsContainer = (LinearLayout) convertView.findViewById(R.id.atlas_view_messages_cell_container);
                     cellsContainer.removeAllViews();
                 }
@@ -304,16 +307,26 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                     View spacerRight = convertView.findViewById(R.id.atlas_view_messages_convert_spacer_right);
                     avatarContainer.requestLayout();
                     if (myMessage) {
+                        messageContainerView.setLayoutParams(myMessageLayoutParams);
+                        messageContainerView.getBackground().setColorFilter(0xFF99DDFF, PorterDuff.Mode.SRC_ATOP);
                         spacerRight.setVisibility(View.GONE);
                         avatarContainer.setVisibility(View.GONE);
-                        timeBar.setLayoutParams(myMessageLayoutParams);
                     } else {
+                        messageContainerView.setLayoutParams(theirMessageLayoutParams);
+                        messageContainerView.getBackground().setColorFilter(0xFFFFFFFF, PorterDuff.Mode.SRC_ATOP);
                         spacerRight.setVisibility(View.VISIBLE);
                         Atlas.Participant participant = participantProvider.getParticipant(userId);
-                        String displayText = participant != null ? Atlas.getFullName(participant) : "";
+                        String displayText = null;
+                        if (participant != null) {
+                            displayText = Atlas.getFullName(participant);
+                        }
+                        if (displayText == null || displayText.length() < 6) {
+                            if (userId != null) {
+                                displayText = userId;
+                            }
+                        }
                         textAvatar.setText(displayText);
                         avatarContainer.setVisibility(View.VISIBLE);
-                        timeBar.setLayoutParams(theirMessageLayoutParams);
                     }
 
                     // mark unsent messages
@@ -894,18 +907,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                 textMy.setText(text);
                 textOther.setVisibility(View.GONE);
 
-                textMy.setBackgroundResource(R.drawable.atlas_shape_rounded16_blue);
-
-                if (CLUSTERED_BUBBLES) {
-                    if (cell.clusterHeadItemId == cell.clusterItemId && !cell.clusterTail) {
-                        textMy.setBackgroundResource(R.drawable.atlas_shape_rounded16_blue_no_bottom_right);
-                    } else if (cell.clusterTail && cell.clusterHeadItemId != cell.clusterItemId) {
-                        textMy.setBackgroundResource(R.drawable.atlas_shape_rounded16_blue_no_top_right);
-                    } else if (cell.clusterHeadItemId != cell.clusterItemId && !cell.clusterTail) {
-                        textMy.setBackgroundResource(R.drawable.atlas_shape_rounded16_blue_no_right);
-                    }
-                }
-                ((GradientDrawable) textMy.getBackground()).setColor(myBubbleColor);
                 textMy.setTextColor(myTextColor);
                 //textMy.setTextSize(TypedValue.COMPLEX_UNIT_DIP, myTextSize);
                 textMy.setTypeface(myTextTypeface, myTextStyle);
@@ -914,17 +915,6 @@ public class AtlasMessagesList extends FrameLayout implements LayerChangeEventLi
                 textOther.setText(text);
                 textMy.setVisibility(View.GONE);
 
-                textOther.setBackgroundResource(R.drawable.atlas_shape_rounded16_gray);
-                if (CLUSTERED_BUBBLES) {
-                    if (cell.clusterHeadItemId == cell.clusterItemId && !cell.clusterTail) {
-                        textOther.setBackgroundResource(R.drawable.atlas_shape_rounded16_gray_no_bottom_left);
-                    } else if (cell.clusterTail && cell.clusterHeadItemId != cell.clusterItemId) {
-                        textOther.setBackgroundResource(R.drawable.atlas_shape_rounded16_gray_no_top_left);
-                    } else if (cell.clusterHeadItemId != cell.clusterItemId && !cell.clusterTail) {
-                        textOther.setBackgroundResource(R.drawable.atlas_shape_rounded16_gray_no_left);
-                    }
-                }
-                ((GradientDrawable) textOther.getBackground()).setColor(otherBubbleColor);
                 textOther.setTextColor(otherTextColor);
                 //textOther.setTextSize(TypedValue.COMPLEX_UNIT_DIP, otherTextSize);
                 textOther.setTypeface(otherTextTypeface, otherTextStyle);
